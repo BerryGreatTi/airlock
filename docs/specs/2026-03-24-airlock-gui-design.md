@@ -150,11 +150,10 @@ struct TerminalView: NSViewRepresentable {
         terminal.startProcess(
             executable: airlockPath,
             args: args,
-            environment: nil,  // inherit
+            currentDirectory: workspace.path,  // CRITICAL: CLI resolves .airlock/ from cwd
+            environment: nil,  // inherit; ensure PATH includes /usr/local/bin, /opt/homebrew/bin
             execName: "airlock"
         )
-        // cwd is set via LocalProcessTerminalView's currentDirectoryURL or
-        // by chdir in the child process. The CLI defaults workspace to os.Getwd().
     }
 }
 ```
