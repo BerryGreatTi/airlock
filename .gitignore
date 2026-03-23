@@ -7,3 +7,4 @@ mapping.json
 # Development scratch files
 .dev/tmp/
 !.dev/tmp/.gitkeep
+.superpowers/
