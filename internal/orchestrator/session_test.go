@@ -1,0 +1,165 @@
+package orchestrator_test
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/taeikkim92/airlock/internal/config"
+	"github.com/taeikkim92/airlock/internal/container"
+	"github.com/taeikkim92/airlock/internal/orchestrator"
+)
+
+type MockRuntime struct {
+	Networks        map[string]string
+	Containers      map[string]string
+	StoppedNames    []string
+	RemovedNames    []string
+	AttachedConfig  *container.ContainerConfig
+	DetachedConfigs []container.ContainerConfig
+	CopiedFiles     []string
+	FailOn          string
+}
+
+func NewMockRuntime() *MockRuntime {
+	return &MockRuntime{Networks: make(map[string]string), Containers: make(map[string]string)}
+}
+
+func (m *MockRuntime) EnsureNetwork(_ context.Context, opts container.NetworkOpts) (string, error) {
+	if m.FailOn == "EnsureNetwork" {
+		return "", fmt.Errorf("mock failure")
+	}
+	id := "net-" + opts.Name
+	m.Networks[opts.Name] = id
+	return id, nil
+}
+
+func (m *MockRuntime) RunDetached(_ context.Context, cfg container.ContainerConfig) (string, error) {
+	if m.FailOn == "RunDetached" {
+		return "", fmt.Errorf("mock failure")
+	}
+	id := "ctr-" + cfg.Name
+	m.Containers[cfg.Name] = id
+	m.DetachedConfigs = append(m.DetachedConfigs, cfg)
+	return id, nil
+}
+
+func (m *MockRuntime) RunAttached(_ context.Context, cfg container.ContainerConfig) error {
+	if m.FailOn == "RunAttached" {
+		return fmt.Errorf("mock failure")
+	}
+	m.AttachedConfig = &cfg
+	m.Containers[cfg.Name] = "ctr-" + cfg.Name
+	return nil
+}
+
+func (m *MockRuntime) Stop(_ context.Context, name string) error {
+	m.StoppedNames = append(m.StoppedNames, name)
+	return nil
+}
+
+func (m *MockRuntime) Remove(_ context.Context, name string) error {
+	m.RemovedNames = append(m.RemovedNames, name)
+	delete(m.Containers, name)
+	return nil
+}
+
+func (m *MockRuntime) RemoveNetwork(_ context.Context, name string) error {
+	delete(m.Networks, name)
+	return nil
+}
+
+func (m *MockRuntime) ConnectNetwork(_ context.Context, networkID, containerID string) error {
+	return nil
+}
+
+func (m *MockRuntime) CopyFromContainer(_ context.Context, containerName, srcPath, dstPath string) error {
+	m.CopiedFiles = append(m.CopiedFiles, fmt.Sprintf("%s:%s->%s", containerName, srcPath, dstPath))
+	os.MkdirAll(filepath.Dir(dstPath), 0755)
+	os.WriteFile(dstPath, []byte("fake-ca-cert"), 0644)
+	return nil
+}
+
+func (m *MockRuntime) WaitForFile(_ context.Context, containerName, path string, maxRetries int) error {
+	return nil
+}
+
+func TestStartSessionCreatesNetworkAndContainers(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	tmpDir := t.TempDir()
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test-workspace", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: tmpDir,
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+	if _, ok := mock.Networks[cfg.NetworkName]; !ok {
+		t.Error("network not created")
+	}
+	if len(mock.DetachedConfigs) == 0 {
+		t.Error("proxy not started")
+	}
+	if mock.AttachedConfig == nil {
+		t.Error("Claude container not started")
+	}
+}
+
+func TestStartSessionWithEnvFile(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, "env.enc")
+	os.WriteFile(envPath, []byte("KEY='ENC[age:xxx]'\n"), 0644)
+	mappingPath := filepath.Join(tmpDir, "mapping.json")
+	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test-workspace", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: tmpDir, EnvFilePath: envPath, MappingPath: mappingPath,
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+	if len(mock.DetachedConfigs) == 0 {
+		t.Fatal("proxy not started")
+	}
+	proxyCfg := mock.DetachedConfigs[0]
+	hasMappingBind := false
+	for _, bind := range proxyCfg.Binds {
+		if strings.Contains(bind, "mapping.json") {
+			hasMappingBind = true
+		}
+	}
+	if !hasMappingBind {
+		t.Error("proxy missing mapping bind mount")
+	}
+}
+
+func TestCleanupSession(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	orchestrator.CleanupSession(context.Background(), mock, cfg)
+	if len(mock.RemovedNames) < 2 {
+		t.Error("expected at least 2 containers removed")
+	}
+}
+
+func TestStartSessionNetworkFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "EnsureNetwork"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when network fails")
+	}
+}
