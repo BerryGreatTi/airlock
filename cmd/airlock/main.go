@@ -1,7 +1,7 @@
 package main
 
-import "fmt"
+import "github.com/taeikkim92/airlock/internal/cli"
 
 func main() {
-	fmt.Println("airlock")
+	cli.Execute()
 }
