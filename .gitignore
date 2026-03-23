@@ -3,3 +3,7 @@ bin/
 *.key
 .airlock/keys/
 mapping.json
+
+# Development scratch files
+.dev/tmp/
+!.dev/tmp/.gitkeep

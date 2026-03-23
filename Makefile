@@ -2,7 +2,7 @@
 
 BINARY := airlock
 VERSION := 0.1.0
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+LDFLAGS := -ldflags "-X github.com/taeikkim92/airlock/internal/cli.Version=$(VERSION)"
 
 build:
 	go build $(LDFLAGS) -o bin/$(BINARY) ./cmd/airlock
