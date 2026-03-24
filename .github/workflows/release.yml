@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Go CLI (macOS arm64)
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          GOOS=darwin GOARCH=arm64 go build \
+            -ldflags "-X github.com/taeikkim92/airlock/internal/cli.Version=$VERSION" \
+            -o airlock-darwin-arm64 ./cmd/airlock
+
+      - name: Build Go CLI (macOS amd64)
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          GOOS=darwin GOARCH=amd64 go build \
+            -ldflags "-X github.com/taeikkim92/airlock/internal/cli.Version=$VERSION" \
+            -o airlock-darwin-amd64 ./cmd/airlock
+
+      - name: Build Go CLI (Linux amd64)
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          GOOS=linux GOARCH=amd64 go build \
+            -ldflags "-X github.com/taeikkim92/airlock/internal/cli.Version=$VERSION" \
+            -o airlock-linux-amd64 ./cmd/airlock
+
+      - name: Create universal macOS CLI binary
+        run: |
+          lipo -create -output airlock-darwin-universal airlock-darwin-arm64 airlock-darwin-amd64
+
+      - name: Run Go tests
+        run: go test -race ./internal/...
+
+      - name: Build GUI (Swift, release mode)
+        run: cd AirlockApp && swift build -c release
+
+      - name: Run GUI tests
+        run: cd AirlockApp && swift test
+
+      - name: Package GUI as .app bundle
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          APP_DIR="AirlockApp.app/Contents"
+          mkdir -p "$APP_DIR/MacOS"
+          mkdir -p "$APP_DIR/Resources/bin"
+
+          cp AirlockApp/.build/release/AirlockApp "$APP_DIR/MacOS/AirlockApp"
+          cp airlock-darwin-universal "$APP_DIR/Resources/bin/airlock"
+          chmod +x "$APP_DIR/Resources/bin/airlock"
+
+          cat > "$APP_DIR/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>Airlock</string>
+              <key>CFBundleDisplayName</key>
+              <string>Airlock</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.airlock.app</string>
+              <key>CFBundleVersion</key>
+              <string>1.0</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleExecutable</key>
+              <string>AirlockApp</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>14.0</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          # Patch version into plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_DIR/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Info.plist"
+
+          codesign --force --deep --sign - AirlockApp.app
+          ditto -c -k --sequesterRsrc --keepParent AirlockApp.app "AirlockApp-macOS.zip"
+
+      - name: Package CLI binaries
+        run: |
+          tar czf airlock-darwin-arm64.tar.gz airlock-darwin-arm64
+          tar czf airlock-darwin-amd64.tar.gz airlock-darwin-amd64
+          tar czf airlock-darwin-universal.tar.gz airlock-darwin-universal
+          tar czf airlock-linux-amd64.tar.gz airlock-linux-amd64
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          gh release create "v${VERSION}" \
+            --title "Airlock v${VERSION}" \
+            --generate-notes \
+            "AirlockApp-macOS.zip#Airlock GUI (macOS, universal)" \
+            "airlock-darwin-universal.tar.gz#CLI (macOS, universal)" \
+            "airlock-darwin-arm64.tar.gz#CLI (macOS, Apple Silicon)" \
+            "airlock-darwin-amd64.tar.gz#CLI (macOS, Intel)" \
+            "airlock-linux-amd64.tar.gz#CLI (Linux, amd64)"
