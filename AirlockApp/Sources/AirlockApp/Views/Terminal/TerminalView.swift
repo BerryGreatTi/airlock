@@ -21,16 +21,19 @@ struct TerminalView: NSViewRepresentable {
             coord.processStarted = true
             let cli = CLIService()
             let binary = cli.resolveAirlockBinary()
-            var args = ["run"]
+
+            // SwiftTerm's startProcess has no currentDirectory param.
+            // Use /bin/bash -c "cd <path> && exec airlock run ..." to set cwd.
+            var cmd = "cd \(shellEscape(workspace.path)) && exec \(shellEscape(binary)) run"
             if let envFile = workspace.envFilePath {
-                args += ["--env", envFile]
+                cmd += " --env \(shellEscape(envFile))"
             }
+
             let env = CLIService.enrichedEnvironment().map { "\($0.key)=\($0.value)" }
             terminal.startProcess(
-                executable: binary,
-                args: args,
+                executable: "/bin/bash",
+                args: ["-c", cmd],
                 environment: env,
-                currentDirectory: workspace.path,
                 execName: "airlock"
             )
         }
@@ -38,6 +41,10 @@ struct TerminalView: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(appState: appState, workspace: workspace)
+    }
+
+    private func shellEscape(_ str: String) -> String {
+        "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
