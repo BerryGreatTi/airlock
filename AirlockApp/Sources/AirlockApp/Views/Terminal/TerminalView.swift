@@ -29,8 +29,8 @@ struct TerminalView: NSViewRepresentable {
             terminal.startProcess(
                 executable: binary,
                 args: args,
-                currentDirectory: workspace.path,
                 environment: env,
+                currentDirectory: workspace.path,
                 execName: "airlock"
             )
         }
@@ -52,9 +52,9 @@ struct TerminalView: NSViewRepresentable {
 
         func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
         func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
-        func hostCurrentDirectoryUpdate(source: LocalProcessTerminalView, directory: String?) {}
+        func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {}
 
-        func processTerminated(source: LocalProcessTerminalView, exitCode: Int32?) {
+        func processTerminated(source: SwiftTerm.TerminalView, exitCode: Int32?) {
             Task { @MainActor in
                 if let code = exitCode, code != 0 {
                     appState.sessionStatus = .error("Process exited with code \(code)")
