@@ -10,6 +10,7 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 | `decisions/` | Architecture Decision Records (ADRs) | When making a design choice that affects the project's direction |
 | `specs/` | Design specifications and technical designs | When designing a feature or system component before implementation |
 | `plans/` | Implementation plans with phased steps | When breaking a spec into executable work |
+| `guides/` | User-facing documentation: installation, security model, troubleshooting | When writing how-to content for end users or operators |
 | `superpowers/plans/` | Auto-generated implementation plans from superpowers skills | When superpowers skills generate detailed task-level plans |
 
 ## Documentation Governance
@@ -29,10 +30,19 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 | [ADR-0002](decisions/ADR-0002-agent-agnostic-security-layer.md) | Agent-agnostic security layer with Claude Code first | Accepted |
 | [ADR-0003](decisions/ADR-0003-open-source-positioning.md) | Open-source positioning as complementary security layer | Accepted |
 
+## Guides Index
+
+| Guide | Audience |
+|-------|----------|
+| [Installation](guides/installation.md) | Users setting up airlock for the first time |
+| [Security Model](guides/security-model.md) | Security teams evaluating airlock, enterprise operators |
+| [Troubleshooting](guides/troubleshooting.md) | Users encountering issues |
+
 ## Reading Order
 
 1. This README (governance and structure)
-2. `glossary/` entries (understand the vocabulary)
-3. `decisions/` (understand why things are the way they are)
-4. `specs/` (understand current design)
-5. `plans/` (understand what's being built)
+2. `guides/` (user-facing how-tos)
+3. `glossary/` entries (understand the vocabulary)
+4. `decisions/` (understand why things are the way they are)
+5. `specs/` (understand current design)
+6. `plans/` (understand what's being built)

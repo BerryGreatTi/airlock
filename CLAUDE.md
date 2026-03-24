@@ -10,6 +10,9 @@
 | `make test-all` | Both Go and Python test suites |
 | `make lint` | Requires `golangci-lint` installed |
 | `make docker-build` | Builds both container images: `airlock-claude:latest` and `airlock-proxy:latest` |
+| `make gui-build` | Build macOS SwiftUI app (requires macOS + Xcode) |
+| `make gui-test` | Run Swift tests |
+| `make gui-run` | Run the GUI app locally |
 
 ## Architecture
 
@@ -18,6 +21,8 @@ Two-container setup on a Docker bridge network:
 - **airlock-proxy**: mitmproxy sidecar. Intercepts outbound HTTPS, replaces `ENC[age:...]` with decrypted values at the network boundary. Claude API traffic passes through untouched.
 
 The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management is behind a `ContainerRuntime` interface (`internal/container/runtime.go`) for testability.
+
+**GUI** (`AirlockApp/`): macOS native SwiftUI app wrapping the Go CLI. Uses SwiftTerm (SPM) for terminal emulation. Communicates with Go CLI via subprocess -- never implements container/crypto logic directly. All CLI commands must set working directory to the workspace path.
 
 ## Testing
 
@@ -33,6 +38,9 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - `mapping.json` (encrypted-to-plaintext mapping) is gitignored -- it exists only at runtime
 - The `ENC[age:...]` wrapper pattern is the contract between the agent container and the proxy. Changing the pattern format breaks decryption.
 - Version is injected at build time via `LDFLAGS` -- `cli.Version` defaults to `"dev"` if not set
+- SwiftTerm's `startProcess` has no `currentDirectory` parameter -- the GUI uses `bash -c "cd <path> && exec airlock run"` as a workaround
+- SwiftTerm delegate methods use `SwiftTerm.TerminalView` (not `LocalProcessTerminalView`) as the `source` parameter type for `hostCurrentDirectoryUpdate` and `processTerminated`
+- GUI builds require macOS 14+ -- CI runs on `macos-14` GitHub Actions runner
 
 ## Documentation
 
