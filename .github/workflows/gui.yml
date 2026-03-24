@@ -1,0 +1,22 @@
+name: GUI Build
+
+on:
+  push:
+    paths:
+      - 'AirlockApp/**'
+      - '.github/workflows/gui.yml'
+  pull_request:
+    paths:
+      - 'AirlockApp/**'
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cd AirlockApp && swift build
+
+      - name: Test
+        run: cd AirlockApp && swift test
