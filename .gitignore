@@ -8,3 +8,8 @@ mapping.json
 .dev/tmp/
 !.dev/tmp/.gitkeep
 .superpowers/
+
+# Swift
+AirlockApp/.build/
+AirlockApp/.swiftpm/
+*.xcuserstate

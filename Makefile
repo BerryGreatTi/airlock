@@ -1,4 +1,4 @@
-.PHONY: build test test-python lint clean docker-build docker-clean
+.PHONY: build test test-python lint clean docker-build docker-clean gui-build gui-test gui-run
 
 BINARY := airlock
 VERSION := 0.1.0
@@ -27,3 +27,12 @@ docker-clean:
 
 clean:
 	rm -rf bin/
+
+gui-build:
+	cd AirlockApp && swift build
+
+gui-test:
+	cd AirlockApp && swift test
+
+gui-run:
+	cd AirlockApp && swift run
