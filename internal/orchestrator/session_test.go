@@ -457,6 +457,201 @@ func TestStartSessionVerifiesClaudeConfig(t *testing.T) {
 	}
 }
 
+func TestStartDetachedSession(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		ID: "test123", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartDetachedSession failed: %v", err)
+	}
+	if len(mock.DetachedConfigs) < 2 {
+		t.Errorf("expected 2 detached containers, got %d", len(mock.DetachedConfigs))
+	}
+	if mock.AttachedConfig != nil {
+		t.Error("detached session should not attach any container")
+	}
+	for _, cfg := range mock.DetachedConfigs {
+		if !strings.Contains(cfg.Name, "test123") {
+			t.Errorf("container name %s should contain workspace ID", cfg.Name)
+		}
+	}
+}
+
+func TestStartDetachedSessionNetworkName(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		ID: "ws42", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartDetachedSession failed: %v", err)
+	}
+	expectedNet := cfg.NetworkName + "-ws42"
+	if _, ok := mock.Networks[expectedNet]; !ok {
+		t.Errorf("expected network %s, got networks: %v", expectedNet, mock.Networks)
+	}
+}
+
+func TestStartDetachedSessionNetworkFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "EnsureNetwork"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when network fails")
+	}
+	if !strings.Contains(err.Error(), "create network") {
+		t.Errorf("expected 'create network' in error, got: %v", err)
+	}
+}
+
+func TestStartDetachedSessionProxyFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "RunDetached"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when proxy start fails")
+	}
+	if !strings.Contains(err.Error(), "start proxy") {
+		t.Errorf("expected 'start proxy' in error, got: %v", err)
+	}
+}
+
+func TestStartDetachedSessionWaitForFileFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "WaitForFile"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when WaitForFile fails")
+	}
+	if !strings.Contains(err.Error(), "proxy CA cert") {
+		t.Errorf("expected 'proxy CA cert' in error, got: %v", err)
+	}
+}
+
+func TestStartDetachedSessionCopyFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "CopyFromContainer"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when CopyFromContainer fails")
+	}
+	if !strings.Contains(err.Error(), "extract proxy CA cert") {
+		t.Errorf("expected 'extract proxy CA cert' in error, got: %v", err)
+	}
+}
+
+func TestStartDetachedSessionUsesKeepAliveEntrypoint(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		ID: "keep1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartDetachedSession failed: %v", err)
+	}
+
+	// Find the claude container config (second detached)
+	var claudeCfg *container.ContainerConfig
+	for i := range mock.DetachedConfigs {
+		if strings.Contains(mock.DetachedConfigs[i].Name, "airlock-claude") {
+			claudeCfg = &mock.DetachedConfigs[i]
+		}
+	}
+	if claudeCfg == nil {
+		t.Fatal("claude detached config not found")
+	}
+	if len(claudeCfg.Cmd) != 1 || claudeCfg.Cmd[0] != "/usr/local/bin/entrypoint-keepalive.sh" {
+		t.Errorf("expected keepalive entrypoint, got cmd: %v", claudeCfg.Cmd)
+	}
+	if claudeCfg.Tty {
+		t.Error("detached claude should not have TTY")
+	}
+	if claudeCfg.Stdin {
+		t.Error("detached claude should not have Stdin")
+	}
+}
+
+func TestStartDetachedSessionWithEnvFile(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, "env.enc")
+	os.WriteFile(envPath, []byte("KEY='ENC[age:xxx]'\n"), 0644)
+	mappingPath := filepath.Join(tmpDir, "mapping.json")
+	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
+	params := orchestrator.SessionParams{
+		ID: "env1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: tmpDir, EnvFilePath: envPath, MappingPath: mappingPath,
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartDetachedSession failed: %v", err)
+	}
+
+	// Verify proxy got mapping bind
+	if len(mock.DetachedConfigs) < 1 {
+		t.Fatal("proxy not started")
+	}
+	proxyCfg := mock.DetachedConfigs[0]
+	hasMappingBind := false
+	for _, bind := range proxyCfg.Binds {
+		if strings.Contains(bind, "mapping.json") {
+			hasMappingBind = true
+		}
+	}
+	if !hasMappingBind {
+		t.Error("proxy missing mapping bind mount")
+	}
+
+	// Verify claude container got env.enc bind
+	var claudeCfg *container.ContainerConfig
+	for i := range mock.DetachedConfigs {
+		if strings.Contains(mock.DetachedConfigs[i].Name, "airlock-claude") {
+			claudeCfg = &mock.DetachedConfigs[i]
+		}
+	}
+	if claudeCfg == nil {
+		t.Fatal("claude container not found")
+	}
+	hasEnvBind := false
+	for _, bind := range claudeCfg.Binds {
+		if strings.Contains(bind, "env.enc") && strings.Contains(bind, ":ro") {
+			hasEnvBind = true
+		}
+	}
+	if !hasEnvBind {
+		t.Error("claude container missing env.enc read-only bind mount")
+	}
+}
+
 func TestStartSessionCACertMountedInClaude(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()

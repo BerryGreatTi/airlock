@@ -338,6 +338,89 @@ func TestBuildProxyConfigWithoutID(t *testing.T) {
 	}
 }
 
+func TestBuildClaudeDetachedConfig(t *testing.T) {
+	opts := container.RunOpts{
+		ID:          "sess1",
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   8080,
+		CACertPath:  "/tmp/ca.pem",
+	}
+	cfg := container.BuildClaudeDetachedConfig(opts)
+
+	// Must use keepalive entrypoint
+	if len(cfg.Cmd) != 1 || cfg.Cmd[0] != "/usr/local/bin/entrypoint-keepalive.sh" {
+		t.Errorf("expected keepalive entrypoint cmd, got %v", cfg.Cmd)
+	}
+
+	// TTY and Stdin must be disabled for detached mode
+	if cfg.Tty {
+		t.Error("detached config should have Tty=false")
+	}
+	if cfg.Stdin {
+		t.Error("detached config should have Stdin=false")
+	}
+
+	// Name should still include ID
+	if cfg.Name != "airlock-claude-sess1" {
+		t.Errorf("expected name airlock-claude-sess1, got %s", cfg.Name)
+	}
+
+	// Should preserve all other fields from BuildClaudeConfig
+	if cfg.Image != "airlock-claude:latest" {
+		t.Errorf("expected image airlock-claude:latest, got %s", cfg.Image)
+	}
+	if cfg.WorkingDir != "/workspace" {
+		t.Errorf("expected working dir /workspace, got %s", cfg.WorkingDir)
+	}
+	if len(cfg.CapDrop) != 1 || cfg.CapDrop[0] != "ALL" {
+		t.Errorf("expected CapDrop=[ALL], got %v", cfg.CapDrop)
+	}
+}
+
+func TestBuildClaudeDetachedConfigPreservesBinds(t *testing.T) {
+	opts := container.RunOpts{
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   8080,
+		EnvFilePath: "/tmp/env.enc",
+		CACertPath:  "/tmp/ca.pem",
+	}
+	cfg := container.BuildClaudeDetachedConfig(opts)
+
+	// Should have all 4 bind mounts (workspace, .claude, env.enc, ca-cert)
+	if len(cfg.Binds) != 4 {
+		t.Errorf("expected 4 bind mounts, got %d: %v", len(cfg.Binds), cfg.Binds)
+	}
+}
+
+func TestBuildClaudeDetachedConfigPreservesEnv(t *testing.T) {
+	opts := container.RunOpts{
+		ID:          "xyz",
+		Workspace:   "/tmp/ws",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   9090,
+	}
+	cfg := container.BuildClaudeDetachedConfig(opts)
+
+	expectedProxy := "http://airlock-proxy-xyz:9090"
+	hasProxy := false
+	for _, env := range cfg.Env {
+		if env == "HTTP_PROXY="+expectedProxy {
+			hasProxy = true
+		}
+	}
+	if !hasProxy {
+		t.Errorf("expected HTTP_PROXY referencing airlock-proxy-xyz, got env: %v", cfg.Env)
+	}
+}
+
 func TestBuildProxyConfigMappingEnv(t *testing.T) {
 	opts := container.RunOpts{
 		ProxyImage:       "airlock-proxy:latest",

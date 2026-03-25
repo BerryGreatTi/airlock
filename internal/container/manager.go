@@ -65,6 +65,17 @@ func BuildProxyConfig(opts RunOpts) ContainerConfig {
 	}
 }
 
+// BuildClaudeDetachedConfig returns a ContainerConfig for the AI agent container
+// in detached (background) mode. It uses the keep-alive entrypoint instead of
+// running claude interactively, and disables TTY/Stdin since no terminal is attached.
+func BuildClaudeDetachedConfig(opts RunOpts) ContainerConfig {
+	cfg := BuildClaudeConfig(opts)
+	cfg.Cmd = []string{"/usr/local/bin/entrypoint-keepalive.sh"}
+	cfg.Tty = false
+	cfg.Stdin = false
+	return cfg
+}
+
 // BuildClaudeConfig returns a ContainerConfig for the AI agent container.
 func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 	claudeName := "airlock-claude"
