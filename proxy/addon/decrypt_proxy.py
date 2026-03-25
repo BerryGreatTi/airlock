@@ -1,5 +1,6 @@
 """mitmproxy addon that transparently decrypts ENC[age:...] patterns in HTTP requests."""
 
+import datetime
 import json
 import os
 import re
@@ -57,26 +58,56 @@ class DecryptAddon:
             result = result.replace(enc_value, plain_value)
         return result
 
+    def _emit_log(self, host: str, action: str, location: str | None = None, key: str | None = None) -> None:
+        """Emit a structured JSON log line. NEVER includes secret values."""
+        entry = {
+            "time": datetime.datetime.now().strftime("%H:%M:%S"),
+            "host": host,
+            "action": action,
+        }
+        if location:
+            entry["location"] = location
+        if key:
+            entry["key"] = key
+        print(json.dumps(entry), flush=True)
+
     def request(self, flow: http.HTTPFlow) -> None:
-        if self.is_passthrough(flow.request.pretty_host):
+        host = flow.request.pretty_host
+
+        if self.is_passthrough(host):
+            self._emit_log(host, "passthrough")
             return
+
+        decrypted = False
+
         for name, value in flow.request.headers.items():
             replaced = self.replace_secrets(value)
             if replaced != value:
                 flow.request.headers[name] = replaced
+                self._emit_log(host, "decrypt", location="header", key=name)
+                decrypted = True
+
         if flow.request.query:
             for key, value in flow.request.query.items():
                 replaced = self.replace_secrets(value)
                 if replaced != value:
                     flow.request.query[key] = replaced
+                    self._emit_log(host, "decrypt", location="query", key=key)
+                    decrypted = True
+
         if flow.request.content:
             try:
                 body = flow.request.content.decode("utf-8")
                 replaced = self.replace_secrets(body)
                 if replaced != body:
                     flow.request.content = replaced.encode("utf-8")
+                    self._emit_log(host, "decrypt", location="body")
+                    decrypted = True
             except UnicodeDecodeError:
                 pass
+
+        if not decrypted:
+            self._emit_log(host, "none")
 
 
 # Only instantiate when loaded by mitmproxy, not during tests
