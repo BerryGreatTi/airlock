@@ -25,7 +25,7 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("docker init: %w", err)
 		}
 		defer docker.Close()
-		orchestrator.CleanupSession(ctx, docker, cfg)
+		orchestrator.CleanupSession(ctx, docker, cfg, "")
 		fmt.Println("Done.")
 		return nil
 	},

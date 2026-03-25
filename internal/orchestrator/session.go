@@ -11,6 +11,7 @@ import (
 
 // SessionParams holds everything needed to start an airlock session.
 type SessionParams struct {
+	ID          string
 	Workspace   string
 	ClaudeDir   string
 	Config      config.Config
@@ -37,6 +38,7 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 	}
 
 	opts := container.RunOpts{
+		ID:               params.ID,
 		Workspace:        params.Workspace,
 		Image:            cfg.ContainerImage,
 		ProxyImage:       cfg.ProxyImage,
@@ -56,13 +58,18 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 	}
 	runtime.ConnectNetwork(ctx, "bridge", proxyID)
 
+	proxyContainerName := "airlock-proxy"
+	if params.ID != "" {
+		proxyContainerName = "airlock-proxy-" + params.ID
+	}
+
 	fmt.Println("Waiting for proxy CA certificate...")
-	if err := runtime.WaitForFile(ctx, "airlock-proxy", mitmproxyCAPath, maxCAWaitRetries); err != nil {
+	if err := runtime.WaitForFile(ctx, proxyContainerName, mitmproxyCAPath, maxCAWaitRetries); err != nil {
 		return fmt.Errorf("proxy CA cert not ready: %w", err)
 	}
 
 	caCertDst := filepath.Join(params.TmpDir, "mitmproxy-ca-cert.pem")
-	if err := runtime.CopyFromContainer(ctx, "airlock-proxy", mitmproxyCAPath, caCertDst); err != nil {
+	if err := runtime.CopyFromContainer(ctx, proxyContainerName, mitmproxyCAPath, caCertDst); err != nil {
 		return fmt.Errorf("extract proxy CA cert: %w", err)
 	}
 	opts.CACertPath = caCertDst
@@ -80,9 +87,15 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 }
 
 // CleanupSession removes the containers and network created by StartSession.
-func CleanupSession(ctx context.Context, runtime container.ContainerRuntime, cfg config.Config) {
+func CleanupSession(ctx context.Context, runtime container.ContainerRuntime, cfg config.Config, id string) {
+	claudeName := "airlock-claude"
+	proxyName := "airlock-proxy"
+	if id != "" {
+		claudeName = "airlock-claude-" + id
+		proxyName = "airlock-proxy-" + id
+	}
 	fmt.Println("\n--- Session ended. Cleaning up...")
-	runtime.Remove(ctx, "airlock-claude")
-	runtime.Remove(ctx, "airlock-proxy")
+	runtime.Remove(ctx, claudeName)
+	runtime.Remove(ctx, proxyName)
 	runtime.RemoveNetwork(ctx, cfg.NetworkName)
 }

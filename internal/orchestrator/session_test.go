@@ -77,6 +77,9 @@ func (m *MockRuntime) ConnectNetwork(_ context.Context, networkID, containerID s
 }
 
 func (m *MockRuntime) CopyFromContainer(_ context.Context, containerName, srcPath, dstPath string) error {
+	if m.FailOn == "CopyFromContainer" {
+		return fmt.Errorf("mock failure")
+	}
 	m.CopiedFiles = append(m.CopiedFiles, fmt.Sprintf("%s:%s->%s", containerName, srcPath, dstPath))
 	os.MkdirAll(filepath.Dir(dstPath), 0755)
 	os.WriteFile(dstPath, []byte("fake-ca-cert"), 0644)
@@ -84,6 +87,9 @@ func (m *MockRuntime) CopyFromContainer(_ context.Context, containerName, srcPat
 }
 
 func (m *MockRuntime) WaitForFile(_ context.Context, containerName, path string, maxRetries int) error {
+	if m.FailOn == "WaitForFile" {
+		return fmt.Errorf("mock failure")
+	}
 	return nil
 }
 
@@ -139,14 +145,127 @@ func TestStartSessionWithEnvFile(t *testing.T) {
 	if !hasMappingBind {
 		t.Error("proxy missing mapping bind mount")
 	}
+
+	// Verify Claude container received the env.enc bind mount
+	if mock.AttachedConfig == nil {
+		t.Fatal("claude container not started")
+	}
+	hasEnvBind := false
+	for _, bind := range mock.AttachedConfig.Binds {
+		if strings.Contains(bind, "env.enc") && strings.Contains(bind, ":ro") {
+			hasEnvBind = true
+		}
+	}
+	if !hasEnvBind {
+		t.Error("claude container missing env.enc read-only bind mount")
+	}
 }
 
 func TestCleanupSession(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
-	orchestrator.CleanupSession(context.Background(), mock, cfg)
+	orchestrator.CleanupSession(context.Background(), mock, cfg, "")
 	if len(mock.RemovedNames) < 2 {
 		t.Error("expected at least 2 containers removed")
+	}
+}
+
+func TestCleanupSessionRemovesBothContainers(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	orchestrator.CleanupSession(context.Background(), mock, cfg, "")
+
+	hasClaudeRemove := false
+	hasProxyRemove := false
+	for _, name := range mock.RemovedNames {
+		if name == "airlock-claude" {
+			hasClaudeRemove = true
+		}
+		if name == "airlock-proxy" {
+			hasProxyRemove = true
+		}
+	}
+	if !hasClaudeRemove {
+		t.Error("airlock-claude not removed during cleanup")
+	}
+	if !hasProxyRemove {
+		t.Error("airlock-proxy not removed during cleanup")
+	}
+}
+
+func TestCleanupSessionRemovesNetwork(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	mock.Networks[cfg.NetworkName] = "net-id"
+	orchestrator.CleanupSession(context.Background(), mock, cfg, "")
+	if _, exists := mock.Networks[cfg.NetworkName]; exists {
+		t.Error("network should be removed during cleanup")
+	}
+}
+
+type FailingMockRuntime struct {
+	MockRuntime
+	RemoveFailNames   map[string]bool
+	NetworkRemoveFail bool
+	RemoveCalls       []string
+	NetworkRemoved    bool
+}
+
+func NewFailingMockRuntime() *FailingMockRuntime {
+	return &FailingMockRuntime{
+		MockRuntime:     *NewMockRuntime(),
+		RemoveFailNames: make(map[string]bool),
+	}
+}
+
+func (m *FailingMockRuntime) Remove(_ context.Context, name string) error {
+	m.RemoveCalls = append(m.RemoveCalls, name)
+	if m.RemoveFailNames[name] {
+		return fmt.Errorf("remove failed for %s", name)
+	}
+	delete(m.Containers, name)
+	return nil
+}
+
+func (m *FailingMockRuntime) RemoveNetwork(_ context.Context, name string) error {
+	m.NetworkRemoved = true
+	if m.NetworkRemoveFail {
+		return fmt.Errorf("network remove failed")
+	}
+	delete(m.Networks, name)
+	return nil
+}
+
+func TestCleanupSessionContinuesOnRemoveFailure(t *testing.T) {
+	mock := NewFailingMockRuntime()
+	mock.RemoveFailNames["airlock-claude"] = true
+	cfg := config.Default()
+
+	// CleanupSession should not panic even when Remove fails
+	orchestrator.CleanupSession(context.Background(), mock, cfg, "")
+
+	// Both containers should have been attempted
+	if len(mock.RemoveCalls) < 2 {
+		t.Errorf("expected 2 remove calls, got %d: %v", len(mock.RemoveCalls), mock.RemoveCalls)
+	}
+
+	// Network removal should still have been attempted
+	if !mock.NetworkRemoved {
+		t.Error("network removal should be attempted even when container remove fails")
+	}
+}
+
+func TestCleanupSessionContinuesOnNetworkRemoveFailure(t *testing.T) {
+	mock := NewFailingMockRuntime()
+	mock.NetworkRemoveFail = true
+	cfg := config.Default()
+
+	// Should not panic
+	orchestrator.CleanupSession(context.Background(), mock, cfg, "")
+
+	// Both containers should still have been removed
+	if len(mock.RemoveCalls) < 2 {
+		t.Errorf("expected 2 remove calls even with network failure, got %d", len(mock.RemoveCalls))
 	}
 }
 
@@ -161,5 +280,211 @@ func TestStartSessionNetworkFailure(t *testing.T) {
 	err := orchestrator.StartSession(context.Background(), mock, params)
 	if err == nil {
 		t.Error("expected error when network fails")
+	}
+}
+
+func TestStartSessionProxyFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "RunDetached"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when proxy start fails")
+	}
+	if !strings.Contains(err.Error(), "start proxy") {
+		t.Errorf("expected 'start proxy' in error, got: %v", err)
+	}
+}
+
+func TestStartSessionRunAttachedFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "RunAttached"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when RunAttached fails")
+	}
+	if !strings.Contains(err.Error(), "run claude") {
+		t.Errorf("expected 'run claude' in error, got: %v", err)
+	}
+	// Verify proxy and network were still created before claude failed
+	if len(mock.DetachedConfigs) == 0 {
+		t.Error("proxy should have been started before claude failure")
+	}
+}
+
+func TestStartSessionWaitForFileFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "WaitForFile"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when WaitForFile fails")
+	}
+	if !strings.Contains(err.Error(), "proxy CA cert") {
+		t.Errorf("expected 'proxy CA cert' in error, got: %v", err)
+	}
+}
+
+func TestStartSessionCopyFromContainerFailure(t *testing.T) {
+	mock := NewMockRuntime()
+	mock.FailOn = "CopyFromContainer"
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err == nil {
+		t.Error("expected error when CopyFromContainer fails")
+	}
+	if !strings.Contains(err.Error(), "extract proxy CA cert") {
+		t.Errorf("expected 'extract proxy CA cert' in error, got: %v", err)
+	}
+}
+
+func TestStartSessionVerifiesProxyConfig(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	cfg.PassthroughHosts = []string{"api.anthropic.com", "custom.example.com"}
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+	if len(mock.DetachedConfigs) == 0 {
+		t.Fatal("proxy not started")
+	}
+	proxyCfg := mock.DetachedConfigs[0]
+
+	// Verify CapDrop is set
+	if len(proxyCfg.CapDrop) == 0 || proxyCfg.CapDrop[0] != "ALL" {
+		t.Error("proxy CapDrop should be [ALL]")
+	}
+
+	// Verify passthrough hosts propagated to env
+	hasPassthrough := false
+	for _, env := range proxyCfg.Env {
+		if strings.Contains(env, "custom.example.com") {
+			hasPassthrough = true
+		}
+	}
+	if !hasPassthrough {
+		t.Error("custom passthrough host not propagated to proxy env")
+	}
+}
+
+func TestStartSessionVerifiesClaudeConfig(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		Workspace: "/home/user/project", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+	if mock.AttachedConfig == nil {
+		t.Fatal("claude container not started")
+	}
+	cc := mock.AttachedConfig
+
+	// Verify TTY and stdin enabled
+	if !cc.Tty {
+		t.Error("claude container should have TTY enabled")
+	}
+	if !cc.Stdin {
+		t.Error("claude container should have stdin enabled")
+	}
+
+	// Verify CapDrop
+	if len(cc.CapDrop) == 0 || cc.CapDrop[0] != "ALL" {
+		t.Error("claude CapDrop should be [ALL]")
+	}
+
+	// Verify command
+	if len(cc.Cmd) < 2 || cc.Cmd[0] != "claude" {
+		t.Errorf("unexpected claude cmd: %v", cc.Cmd)
+	}
+
+	// Verify proxy env vars
+	proxyEnvCount := 0
+	for _, env := range cc.Env {
+		if strings.Contains(env, "PROXY") || strings.Contains(env, "proxy") {
+			proxyEnvCount++
+		}
+	}
+	if proxyEnvCount < 5 {
+		t.Errorf("expected at least 5 proxy env vars, got %d", proxyEnvCount)
+	}
+
+	// Verify workspace bind
+	hasWorkspace := false
+	for _, bind := range cc.Binds {
+		if strings.Contains(bind, "/home/user/project:/workspace") {
+			hasWorkspace = true
+		}
+	}
+	if !hasWorkspace {
+		t.Error("workspace bind mount not found")
+	}
+
+	// Verify .claude bind (read-only)
+	hasClaude := false
+	for _, bind := range cc.Binds {
+		if strings.Contains(bind, ".claude") && strings.Contains(bind, ":ro") {
+			hasClaude = true
+		}
+	}
+	if !hasClaude {
+		t.Error(".claude read-only bind mount not found")
+	}
+}
+
+func TestStartSessionCACertMountedInClaude(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	params := orchestrator.SessionParams{
+		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Config: cfg, TmpDir: t.TempDir(),
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+	if mock.AttachedConfig == nil {
+		t.Fatal("claude container not started")
+	}
+
+	// Verify CA cert bind mount exists
+	hasCACert := false
+	for _, bind := range mock.AttachedConfig.Binds {
+		if strings.Contains(bind, "ca-certificates") && strings.Contains(bind, ":ro") {
+			hasCACert = true
+		}
+	}
+	if !hasCACert {
+		t.Error("CA cert should be mounted read-only in claude container")
+	}
+
+	// Verify CopyFromContainer was called for proxy CA cert
+	if len(mock.CopiedFiles) == 0 {
+		t.Error("CopyFromContainer should have been called for CA cert")
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 // RunOpts holds all options needed to launch the airlock container pair.
 type RunOpts struct {
+	ID               string
 	Workspace        string
 	Image            string
 	ProxyImage       string
@@ -46,10 +47,14 @@ type ContainerConfig struct {
 
 // BuildProxyConfig returns a ContainerConfig for the mitmproxy sidecar.
 func BuildProxyConfig(opts RunOpts) ContainerConfig {
+	name := "airlock-proxy"
+	if opts.ID != "" {
+		name = "airlock-proxy-" + opts.ID
+	}
 	passthroughStr := strings.Join(opts.PassthroughHosts, ",")
 	return ContainerConfig{
 		Image:   opts.ProxyImage,
-		Name:    "airlock-proxy",
+		Name:    name,
 		Network: opts.NetworkName,
 		Binds:   []string{fmt.Sprintf("%s:/run/airlock/mapping.json:ro", opts.MappingPath)},
 		Env: []string{
@@ -62,7 +67,13 @@ func BuildProxyConfig(opts RunOpts) ContainerConfig {
 
 // BuildClaudeConfig returns a ContainerConfig for the AI agent container.
 func BuildClaudeConfig(opts RunOpts) ContainerConfig {
-	proxyURL := fmt.Sprintf("http://airlock-proxy:%d", opts.ProxyPort)
+	claudeName := "airlock-claude"
+	proxyName := "airlock-proxy"
+	if opts.ID != "" {
+		claudeName = "airlock-claude-" + opts.ID
+		proxyName = "airlock-proxy-" + opts.ID
+	}
+	proxyURL := fmt.Sprintf("http://%s:%d", proxyName, opts.ProxyPort)
 
 	binds := []string{
 		fmt.Sprintf("%s:/workspace", opts.Workspace),
@@ -77,7 +88,7 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 
 	return ContainerConfig{
 		Image:      opts.Image,
-		Name:       "airlock-claude",
+		Name:       claudeName,
 		Network:    opts.NetworkName,
 		WorkingDir: "/workspace",
 		Tty:        true,

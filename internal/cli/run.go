@@ -87,7 +87,7 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		defer docker.Close()
 
 		err = orchestrator.StartSession(ctx, docker, params)
-		orchestrator.CleanupSession(ctx, docker, cfg)
+		orchestrator.CleanupSession(ctx, docker, cfg, "")
 		return err
 	},
 }
