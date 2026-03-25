@@ -93,6 +93,10 @@ func (m *MockRuntime) WaitForFile(_ context.Context, containerName, path string,
 	return nil
 }
 
+func (m *MockRuntime) ListContainers(_ context.Context, prefix string) ([]container.ContainerInfo, error) {
+	return nil, nil
+}
+
 func TestStartSessionCreatesNetworkAndContainers(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()

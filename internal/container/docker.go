@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	dockercontainer "github.com/docker/docker/api/types/container"
@@ -251,4 +252,29 @@ func (d *Docker) WaitForFile(ctx context.Context, containerName, path string, ma
 		time.Sleep(time.Second)
 	}
 	return fmt.Errorf("file %s not found in container %s after %d retries", path, containerName, maxRetries)
+}
+
+// ListContainers returns info about containers whose name starts with the given prefix.
+func (d *Docker) ListContainers(ctx context.Context, prefix string) ([]ContainerInfo, error) {
+	containers, err := d.client.ContainerList(ctx, dockercontainer.ListOptions{All: true})
+	if err != nil {
+		return nil, fmt.Errorf("list containers: %w", err)
+	}
+	var result []ContainerInfo
+	for _, c := range containers {
+		for _, name := range c.Names {
+			clean := strings.TrimPrefix(name, "/")
+			if strings.HasPrefix(clean, prefix) {
+				info := ContainerInfo{Name: clean, Status: c.State}
+				if c.State == "running" {
+					info.Uptime = c.Status
+				}
+				if c.State == "exited" {
+					info.Error = c.Status
+				}
+				result = append(result, info)
+			}
+		}
+	}
+	return result, nil
 }
