@@ -12,6 +12,20 @@
 
 ---
 
+## Branch Strategy
+
+- **Phase 1-2 (Go + Python):** Completed on `main`. All tests pass.
+- **Phase 3-7 (Swift GUI):** Work on `feat/gui-primary-redesign` branch. Requires macOS + Xcode for build verification (`make gui-build && make gui-test`). Merge to `main` after all tasks pass.
+
+```bash
+git checkout -b feat/gui-primary-redesign
+# ... implement Tasks 6-15 ...
+# After all tasks pass:
+git checkout main && git merge feat/gui-primary-redesign
+```
+
+---
+
 ## Phase 1: CLI Engine -- New Commands (Go)
 
 ### Task 1: Parameterize container/network names with workspace ID
