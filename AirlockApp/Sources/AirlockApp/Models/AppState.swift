@@ -16,6 +16,7 @@ enum DetailTab: Hashable {
 }
 
 @Observable
+@MainActor
 final class AppState {
     var workspaces: [Workspace] = []
     var selectedWorkspaceID: UUID?
