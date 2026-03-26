@@ -62,7 +62,7 @@ struct ContentView: View {
             case .secrets:
                 SecretsView(workspace: workspace, appState: appState)
             case .containers:
-                Text("Containers tab placeholder")
+                ContainerStatusView(workspace: workspace, appState: appState)
             case .diff:
                 DiffContainerView(workspace: workspace, appState: appState)
             case .settings:
