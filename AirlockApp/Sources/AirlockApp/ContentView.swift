@@ -157,9 +157,8 @@ struct ContentView: View {
 
     private func cleanupOrphans() {
         Task {
-            let home = FileManager.default.homeDirectoryForCurrentUser.path
             for id in orphanedContainers {
-                _ = try? await containerService.cli.run(args: ["stop", "--id", id], workingDirectory: home)
+                await containerService.stopByID(id)
             }
             orphanedContainers = []
         }

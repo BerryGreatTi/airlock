@@ -13,7 +13,7 @@ extension EnvironmentValues {
 }
 
 final class ContainerSessionService {
-    let cli: CLIService
+    private let cli: CLIService
 
     init(cli: CLIService = CLIService()) {
         self.cli = cli
@@ -42,6 +42,11 @@ final class ContainerSessionService {
     func status() async throws -> CLIResult {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return try await cli.run(args: ["status"], workingDirectory: home)
+    }
+
+    func stopByID(_ id: String) async {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        _ = try? await cli.run(args: ["stop", "--id", id], workingDirectory: home)
     }
 
     func isDockerRunning() async -> Bool {
