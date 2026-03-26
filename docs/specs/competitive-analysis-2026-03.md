@@ -38,7 +38,7 @@ Conductor is a macOS desktop app for orchestrating teams of coding agents. It cr
 | Network isolation | None | mitmproxy transparent proxy |
 | Security model | Same as user permissions | Least-privilege container |
 | Platform | macOS only | Cross-platform (Docker) |
-| Interface | GUI (desktop app) | CLI |
+| Interface | GUI (desktop app) | macOS GUI + CLI |
 | Agent support | Multi-provider + Codex | Claude Code first, extensible |
 | Workflow scope | Issue to PR (full cycle) | Session-based (run/stop) |
 | Pricing | Free (seed-funded) | Open-source |
@@ -60,4 +60,4 @@ Conductor is a macOS desktop app for orchestrating teams of coding agents. It cr
 1. **Adoption friction** -- requires Docker installation and setup
 2. **HMAC/signature auth** -- keys used in computation (AWS Signature V4) unsupported by current proxy design
 3. **Platform risk** -- Anthropic could build native container isolation into Claude Code
-4. **Narrow UX** -- CLI only, no workflow management
+4. **Cross-platform GUI** -- macOS GUI available, Linux users rely on CLI

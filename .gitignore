@@ -13,3 +13,6 @@ mapping.json
 AirlockApp/.build/
 AirlockApp/.swiftpm/
 *.xcuserstate
+
+# Local setting files
+.claude/settings.local.json

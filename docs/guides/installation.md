@@ -5,13 +5,54 @@
 | Requirement | Version | Notes |
 |-------------|---------|-------|
 | Docker | 20.10+ | Must be running. Used for container isolation. |
-| Go | 1.22+ | Only for building from source |
-| macOS | 14.0+ (Sonoma) | Only for the GUI app |
+| macOS | 14.0+ (Sonoma) | For the GUI app (recommended) |
+| Go | 1.22+ | Only for building CLI from source |
 | git | 2.x | For diff viewer functionality |
 
-## Install the CLI
+## Install the GUI App (macOS -- recommended)
 
-### Option A: Pre-built binary (recommended)
+### Step 1: Download
+
+Download `AirlockApp-macOS.zip` from [Releases](https://github.com/BerryGreatTi/airlock/releases).
+
+```bash
+unzip AirlockApp-macOS.zip
+mv AirlockApp.app /Applications/
+```
+
+On first launch, macOS may block the unsigned app. Go to System Settings > Privacy & Security > Open Anyway.
+
+### Step 2: Build container images
+
+Airlock uses two Docker images. Build them before first use:
+
+```bash
+git clone https://github.com/BerryGreatTi/airlock.git
+cd airlock
+make docker-build
+```
+
+This creates:
+- `airlock-claude:latest` -- Container with Claude Code installed
+- `airlock-proxy:latest` -- mitmproxy sidecar for transparent decryption
+
+### Step 3: Launch and create a workspace
+
+1. Open AirlockApp
+2. The app checks Docker status and image availability
+3. Click "Create Your First Workspace"
+4. Select your project directory
+5. (Optional) Select your `.env` file
+6. Click "Create Workspace"
+7. Activate the workspace to start containers and open a terminal
+
+The GUI includes the CLI engine internally. No separate CLI installation is needed for GUI users.
+
+## Install the CLI (Linux & advanced users)
+
+For Linux users, SSH/remote environments, and terminal-preference workflows.
+
+### Option A: Pre-built binary
 
 Download from [GitHub Releases](https://github.com/BerryGreatTi/airlock/releases):
 
@@ -20,19 +61,9 @@ Download from [GitHub Releases](https://github.com/BerryGreatTi/airlock/releases
 curl -L https://github.com/BerryGreatTi/airlock/releases/latest/download/airlock-darwin-universal.tar.gz | tar xz
 sudo mv airlock-darwin-universal /usr/local/bin/airlock
 
-# macOS (Apple Silicon only)
-curl -L https://github.com/BerryGreatTi/airlock/releases/latest/download/airlock-darwin-arm64.tar.gz | tar xz
-sudo mv airlock-darwin-arm64 /usr/local/bin/airlock
-
 # Linux (amd64)
 curl -L https://github.com/BerryGreatTi/airlock/releases/latest/download/airlock-linux-amd64.tar.gz | tar xz
 sudo mv airlock-linux-amd64 /usr/local/bin/airlock
-```
-
-Verify:
-```bash
-airlock version
-# airlock 0.1.0
 ```
 
 ### Option B: Build from source
@@ -44,46 +75,13 @@ make build
 # Binary at ./bin/airlock
 ```
 
-## Build container images
-
-Airlock uses two Docker images. Build them before first use:
+### Build container images
 
 ```bash
 make docker-build
 ```
 
-This creates:
-- `airlock-claude:latest` -- Container with Claude Code installed
-- `airlock-proxy:latest` -- mitmproxy sidecar for transparent decryption
-
-## Install the GUI (macOS)
-
-Download `AirlockApp-macOS.zip` from [Releases](https://github.com/BerryGreatTi/airlock/releases).
-
-```bash
-# Unzip and move to Applications
-unzip AirlockApp-macOS.zip
-mv AirlockApp.app /Applications/
-```
-
-On first launch, macOS may block the unsigned app. Go to System Settings > Privacy & Security > Open Anyway.
-
-The GUI bundles the CLI binary internally. You do not need a separate CLI installation if you only use the GUI.
-
-## Verify installation
-
-```bash
-# Check CLI
-airlock version
-
-# Check Docker images exist
-docker images | grep airlock
-
-# Check Docker is running
-docker info > /dev/null 2>&1 && echo "Docker OK" || echo "Docker not running"
-```
-
-## First-time setup
+### CLI first-time setup
 
 ```bash
 cd ~/your-project
@@ -98,4 +96,17 @@ This creates `.airlock/` containing:
 Add to your `.gitignore`:
 ```
 .airlock/keys/
+```
+
+## Verify installation
+
+```bash
+# Check CLI (if installed separately)
+airlock version
+
+# Check Docker images exist
+docker images | grep airlock
+
+# Check Docker is running
+docker info > /dev/null 2>&1 && echo "Docker OK" || echo "Docker not running"
 ```

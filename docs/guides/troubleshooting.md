@@ -1,5 +1,36 @@
 # Troubleshooting
 
+## GUI Issues
+
+### App won't open (macOS Gatekeeper)
+
+The app is ad-hoc signed, not notarized. Allow it:
+System Settings > Privacy & Security > scroll to "AirlockApp was blocked" > Open Anyway
+
+### Workspace activation fails
+
+1. Ensure Docker Desktop is running
+2. Ensure container images are built (`make docker-build`)
+3. Check the airlock binary is accessible (Settings > Airlock binary path)
+4. If containers from a previous crash remain, the app will offer cleanup on launch
+
+### "Not a git repository" in diff viewer
+
+The diff viewer requires the workspace to be a git repository. Initialize git:
+```bash
+cd ~/your-project
+git init && git add -A && git commit -m "initial"
+```
+
+### Terminals not opening after activation
+
+The workspace must be in "Running" (green dot) state. If activation failed silently:
+1. Check the Containers tab for error details
+2. Try deactivating and reactivating the workspace
+3. Check Docker logs: `docker logs airlock-claude-{workspace-id}`
+
+---
+
 ## Docker Issues
 
 ### "Cannot connect to the Docker daemon"
@@ -62,27 +93,6 @@ Claude API traffic (`api.anthropic.com`, `auth.anthropic.com`) should pass throu
      - api.anthropic.com
      - auth.anthropic.com
    ```
-
-## GUI Issues
-
-### "Not a git repository" in diff viewer
-
-The diff viewer requires the workspace to be a git repository. Initialize git:
-```bash
-cd ~/your-project
-git init && git add -A && git commit -m "initial"
-```
-
-### App won't open (macOS Gatekeeper)
-
-The app is ad-hoc signed, not notarized. Allow it:
-System Settings > Privacy & Security > scroll to "AirlockApp was blocked" > Open Anyway
-
-### Terminal not connecting
-
-1. Ensure Docker is running
-2. Ensure container images are built (`make docker-build`)
-3. Check the airlock binary is accessible (Settings > Airlock binary path)
 
 ## General
 

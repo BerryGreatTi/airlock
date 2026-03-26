@@ -43,71 +43,43 @@ Airlock solves this by ensuring **secrets never exist in plaintext inside the ag
 3. When the agent makes API calls, the proxy replaces encrypted values with real ones
 4. Claude API traffic passes through untouched (no MITM on Anthropic)
 
-## Quickstart
+## Get Started
 
-### Prerequisites
-
-- Docker (running)
-- Go 1.22+ (to build from source) or download a [pre-built binary](https://github.com/BerryGreatTi/airlock/releases)
-
-### Install
-
-```bash
-# From source
-git clone https://github.com/BerryGreatTi/airlock.git
-cd airlock
-make build
-# Binary at ./bin/airlock
-
-# Or download from releases
-curl -L https://github.com/BerryGreatTi/airlock/releases/latest/download/airlock-darwin-universal.tar.gz | tar xz
-```
-
-### Build container images
-
-```bash
-make docker-build
-# Builds: airlock-claude:latest, airlock-proxy:latest
-```
-
-### Usage
-
-```bash
-# 1. Initialize airlock in your project
-cd ~/my-project
-airlock init
-# Creates .airlock/ with age keypair and config
-
-# 2. Run Claude Code in an isolated container
-airlock run --env .env
-# Encrypts .env values, starts containers, opens interactive session
-# Inside: secrets are ENC[age:...], proxy decrypts on outbound requests
-
-# 3. Stop containers when done
-airlock stop
-```
-
-### Encrypt secrets (standalone)
-
-```bash
-# Encrypt .env file (creates .env.enc)
-airlock encrypt .env
-
-# Verify: encrypted values are ENC[age:...] wrapped
-cat .env.enc
-```
-
-## GUI (macOS)
-
-A native macOS app is available for managing workspaces, viewing a terminal session, and reviewing file diffs.
+### GUI App (macOS -- recommended)
 
 Download `AirlockApp-macOS.zip` from [Releases](https://github.com/BerryGreatTi/airlock/releases).
 
-Features:
-- Workspace management (sidebar with project list)
-- Embedded terminal (SwiftTerm) for containerized Claude Code sessions
-- Side-by-side diff viewer for file changes
-- Settings for container images, proxy hosts, and env file paths
+```bash
+unzip AirlockApp-macOS.zip
+mv AirlockApp.app /Applications/
+```
+
+The app provides:
+- Workspace management with multiple concurrent sessions
+- Split-pane terminals running inside isolated containers
+- Secrets management (encrypt, edit, view status)
+- Container and proxy status monitoring
+- Side-by-side diff viewer
+
+On first launch, the app checks Docker status and guides you through setup.
+
+### CLI (Linux & advanced users)
+
+Prerequisites: Docker (running), Go 1.22+ (build from source) or [pre-built binary](https://github.com/BerryGreatTi/airlock/releases)
+
+```bash
+# Install
+curl -L https://github.com/BerryGreatTi/airlock/releases/latest/download/airlock-linux-amd64.tar.gz | tar xz
+sudo mv airlock-linux-amd64 /usr/local/bin/airlock
+
+# Build container images
+make docker-build
+
+# Initialize and run
+cd ~/my-project
+airlock init
+airlock run --env .env
+```
 
 ## CLI Reference
 

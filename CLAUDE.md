@@ -22,7 +22,7 @@ Two-container setup on a Docker bridge network:
 
 The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management is behind a `ContainerRuntime` interface (`internal/container/runtime.go`) for testability.
 
-**GUI** (`AirlockApp/`): macOS native SwiftUI app wrapping the Go CLI. Uses SwiftTerm (SPM) for terminal emulation. Communicates with Go CLI via subprocess -- never implements container/crypto logic directly. All CLI commands must set working directory to the workspace path.
+**GUI** (`AirlockApp/`): macOS native SwiftUI app -- the primary user interface (see [ADR-0004](docs/decisions/ADR-0004-gui-primary-interface.md)). Uses SwiftTerm (SPM) for terminal emulation. The GUI invokes the Go CLI as a subprocess engine -- it never implements container/crypto logic directly. All Docker interaction from Swift is via subprocess (`docker exec`, `docker logs`), not Docker API.
 
 ## Testing
 

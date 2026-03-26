@@ -29,6 +29,7 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 | [ADR-0001](decisions/ADR-0001-docs-first-workflow.md) | Documentation-first workflow | Accepted |
 | [ADR-0002](decisions/ADR-0002-agent-agnostic-security-layer.md) | Agent-agnostic security layer with Claude Code first | Accepted |
 | [ADR-0003](decisions/ADR-0003-open-source-positioning.md) | Open-source positioning as complementary security layer | Accepted |
+| [ADR-0004](decisions/ADR-0004-gui-primary-interface.md) | GUI as primary interface, CLI as engine | Accepted |
 
 ## Guides Index
 
@@ -41,8 +42,10 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 ## Reading Order
 
 1. This README (governance and structure)
-2. `guides/` (user-facing how-tos)
-3. `glossary/` entries (understand the vocabulary)
-4. `decisions/` (understand why things are the way they are)
-5. `specs/` (understand current design)
-6. `plans/` (understand what's being built)
+2. [ADR-0004](decisions/ADR-0004-gui-primary-interface.md) (GUI-primary architecture -- key strategic decision)
+3. `guides/installation.md` (GUI app setup)
+4. `guides/` (security model, troubleshooting)
+5. `glossary/` entries (understand the vocabulary)
+6. `decisions/` (understand why things are the way they are)
+7. `specs/` (understand current design -- see `superpowers/specs/2026-03-25-gui-primary-redesign.md` for the active spec)
+8. `plans/` (understand what's being built)

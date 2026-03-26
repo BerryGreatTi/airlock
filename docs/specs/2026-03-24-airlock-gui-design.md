@@ -1,5 +1,7 @@
 # Airlock GUI Design Spec
 
+> **Status: Superseded** by [2026-03-25-gui-primary-redesign.md](../superpowers/specs/2026-03-25-gui-primary-redesign.md) (see [ADR-0004](../decisions/ADR-0004-gui-primary-interface.md)). This spec documents the initial GUI architecture (single active workspace, CLI wrapper model). Refer to the new spec for multi-workspace support, container-based terminals, and GUI-primary design.
+
 ## Overview
 
 macOS native SwiftUI application that provides a graphical interface for the airlock CLI tool. The GUI wraps the existing Go CLI binary, offering workspace management, a terminal emulator for containerized Claude Code sessions, a side-by-side diff viewer, and configuration management.
