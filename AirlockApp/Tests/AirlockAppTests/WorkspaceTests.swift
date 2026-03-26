@@ -18,4 +18,29 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertEqual(decoded.name, ws.name)
         XCTAssertEqual(decoded.envFilePath, ws.envFilePath)
     }
+
+    func testShortIDFormat() {
+        let ws = Workspace(name: "test", path: "/tmp")
+        XCTAssertEqual(ws.shortID.count, 8)
+        XCTAssertEqual(ws.containerName, "airlock-claude-\(ws.shortID)")
+        XCTAssertEqual(ws.proxyName, "airlock-proxy-\(ws.shortID)")
+    }
+
+    func testRuntimeFieldsNotEncoded() throws {
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.isActive = true
+        ws.containerId = "abc"
+        ws.proxyId = "def"
+        let data = try JSONEncoder().encode(ws)
+        let decoded = try JSONDecoder().decode(Workspace.self, from: data)
+        XCTAssertFalse(decoded.isActive)
+        XCTAssertNil(decoded.containerId)
+        XCTAssertNil(decoded.proxyId)
+    }
+
+    func testTerminalSessionCreation() {
+        let session = TerminalSession()
+        XCTAssertTrue(session.isActive)
+        XCTAssertFalse(session.id.uuidString.isEmpty)
+    }
 }

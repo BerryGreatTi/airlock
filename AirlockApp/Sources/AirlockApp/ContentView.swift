@@ -2,6 +2,10 @@ import SwiftUI
 
 struct ContentView: View {
     @State var appState = AppState()
+    @State private var containerService = ContainerSessionService()
+    @State private var orphanedContainers: [String] = []
+    @State private var showingOrphanCleanup = false
+    @State private var terminalAction: TerminalAction?
 
     var body: some View {
         NavigationSplitView {
@@ -10,12 +14,27 @@ struct ContentView: View {
         } detail: {
             detailContent
         }
-        .onAppear { loadState() }
+        .environment(\.containerService, containerService)
+        .focusedValue(\.appState, appState)
+        .focusedValue(\.containerService, containerService)
+        .focusedValue(\.terminalAction, $terminalAction)
+        .onAppear {
+            loadState()
+            reconcileRunningContainers()
+        }
+        .alert("Orphaned Containers Found", isPresented: $showingOrphanCleanup) {
+            Button("Clean Up") { cleanupOrphans() }
+            Button("Ignore", role: .cancel) { orphanedContainers = [] }
+        } message: {
+            Text("\(orphanedContainers.count) container(s) running without a matching workspace. Clean them up?")
+        }
     }
 
     @ViewBuilder
     private var detailContent: some View {
-        if appState.selectedTab == .settings {
+        if appState.workspaces.isEmpty {
+            WelcomeView(appState: appState)
+        } else if appState.selectedTab == .settings {
             SettingsView(appState: appState)
         } else if let workspace = appState.selectedWorkspace {
             VStack(spacing: 0) {
@@ -35,6 +54,8 @@ struct ContentView: View {
     private var tabBar: some View {
         HStack(spacing: 0) {
             tabButton("Terminal", tab: .terminal, icon: "terminal")
+            tabButton("Secrets", tab: .secrets, icon: "key")
+            tabButton("Containers", tab: .containers, icon: "shippingbox")
             tabButton("Diff", tab: .diff, icon: "doc.text.magnifyingglass")
             Spacer()
         }
@@ -46,33 +67,36 @@ struct ContentView: View {
         ZStack {
             switch appState.selectedTab {
             case .terminal:
-                TerminalView(workspace: workspace, appState: appState)
+                if appState.isActive(workspace) {
+                    TerminalSplitView(containerName: workspace.containerName, action: $terminalAction)
+                } else {
+                    ContentUnavailableView {
+                        Label("Workspace Inactive", systemImage: "terminal")
+                    } description: {
+                        Text("Activate this workspace from the sidebar to open a terminal")
+                    }
+                }
+            case .secrets:
+                SecretsView(workspace: workspace, appState: appState)
+            case .containers:
+                ContainerStatusView(workspace: workspace, appState: appState)
             case .diff:
                 DiffContainerView(workspace: workspace, appState: appState)
             case .settings:
                 SettingsView(appState: appState)
             }
 
-            // Error banner overlay
-            if case .error(let msg) = appState.sessionStatus {
+            if let error = appState.lastError {
                 VStack {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
-                        Text(msg).font(.caption)
+                        Text(error).font(.caption)
                         Spacer()
                         Button("Dismiss") {
-                            appState.sessionStatus = .stopped
                             appState.lastError = nil
                         }
                         .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        Button("Restart") {
-                            if let ws = appState.selectedWorkspace {
-                                restartWorkspace(ws)
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                     }
                     .padding(8)
@@ -81,14 +105,6 @@ struct ContentView: View {
                     .padding()
                     Spacer()
                 }
-            }
-
-            // Session ended overlay
-            if appState.sessionStatus == .stopped
-                && appState.activeWorkspaceID == nil
-                && appState.lastError == nil
-                && appState.selectedTab == .terminal {
-                // Only show if a session previously ran (not on fresh load)
             }
         }
     }
@@ -105,22 +121,46 @@ struct ContentView: View {
         .background(appState.selectedTab == tab ? Color.accentColor.opacity(0.15) : .clear)
     }
 
-    private func restartWorkspace(_ workspace: Workspace) {
-        Task {
-            let cli = CLIService()
-            _ = try? await cli.run(args: ["stop"], workingDirectory: workspace.path)
-            appState.sessionStatus = .stopped
-            appState.lastError = nil
-
-            // Small delay then restart
-            try? await Task.sleep(for: .milliseconds(500))
-            appState.activeWorkspaceID = workspace.id
-            appState.sessionStatus = .running
-        }
-    }
-
     private func loadState() {
         let store = WorkspaceStore()
         appState.workspaces = (try? store.loadWorkspaces()) ?? []
+    }
+
+    private func reconcileRunningContainers() {
+        Task {
+            guard let result = try? await containerService.status() else { return }
+            guard let data = result.stdout.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let workspaces = json["workspaces"] as? [[String: Any]] else { return }
+
+            var orphans: [String] = []
+            for entry in workspaces {
+                guard let entryID = entry["id"] as? String,
+                      let status = entry["status"] as? String,
+                      status == "running" else { continue }
+
+                let matched = appState.workspaces.first { $0.shortID == entryID }
+                if let ws = matched, let idx = appState.workspaces.firstIndex(where: { $0.id == ws.id }) {
+                    appState.activeWorkspaceIDs.insert(ws.id)
+                    appState.workspaces[idx].isActive = true
+                } else {
+                    orphans.append(entryID)
+                }
+            }
+
+            if !orphans.isEmpty {
+                orphanedContainers = orphans
+                showingOrphanCleanup = true
+            }
+        }
+    }
+
+    private func cleanupOrphans() {
+        Task {
+            for id in orphanedContainers {
+                await containerService.stopByID(id)
+            }
+            orphanedContainers = []
+        }
     }
 }

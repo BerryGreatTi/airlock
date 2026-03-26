@@ -2,8 +2,13 @@ import SwiftUI
 import SwiftTerm
 
 struct TerminalView: NSViewRepresentable {
-    let workspace: Workspace
-    @Bindable var appState: AppState
+    let containerName: String
+    let onTerminated: (() -> Void)?
+
+    init(containerName: String, onTerminated: (() -> Void)? = nil) {
+        self.containerName = containerName
+        self.onTerminated = onTerminated
+    }
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let terminal = LocalProcessTerminalView(frame: .zero)
@@ -14,33 +19,21 @@ struct TerminalView: NSViewRepresentable {
 
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
         let coord = context.coordinator
-        if appState.activeWorkspaceID == workspace.id
-            && appState.sessionStatus == .running
-            && !coord.processStarted
-        {
+        if !coord.processStarted {
             coord.processStarted = true
-            let cli = CLIService()
-            let binary = cli.resolveAirlockBinary()
-
-            // SwiftTerm's startProcess has no currentDirectory param.
-            // Use /bin/bash -c "cd <path> && exec airlock run ..." to set cwd.
-            var cmd = "cd \(shellEscape(workspace.path)) && exec \(shellEscape(binary)) run"
-            if let envFile = workspace.envFilePath {
-                cmd += " --env \(shellEscape(envFile))"
-            }
-
+            let cmd = "docker exec -it \(shellEscape(containerName)) /bin/bash"
             let env = CLIService.enrichedEnvironment().map { "\($0.key)=\($0.value)" }
             terminal.startProcess(
                 executable: "/bin/bash",
                 args: ["-c", cmd],
                 environment: env,
-                execName: "airlock"
+                execName: "docker"
             )
         }
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(appState: appState, workspace: workspace)
+        Coordinator(onTerminated: onTerminated)
     }
 
     private func shellEscape(_ str: String) -> String {
@@ -48,13 +41,11 @@ struct TerminalView: NSViewRepresentable {
     }
 
     class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
-        let appState: AppState
-        let workspace: Workspace
+        let onTerminated: (() -> Void)?
         var processStarted = false
 
-        init(appState: AppState, workspace: Workspace) {
-            self.appState = appState
-            self.workspace = workspace
+        init(onTerminated: (() -> Void)?) {
+            self.onTerminated = onTerminated
         }
 
         func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
@@ -63,13 +54,7 @@ struct TerminalView: NSViewRepresentable {
 
         func processTerminated(source: SwiftTerm.TerminalView, exitCode: Int32?) {
             Task { @MainActor in
-                if let code = exitCode, code != 0 {
-                    appState.sessionStatus = .error("Process exited with code \(code)")
-                    appState.lastError = "Process exited with code \(code)"
-                } else {
-                    appState.sessionStatus = .stopped
-                }
-                appState.activeWorkspaceID = nil
+                onTerminated?()
             }
         }
     }
