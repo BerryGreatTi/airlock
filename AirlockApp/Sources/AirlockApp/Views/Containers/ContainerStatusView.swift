@@ -195,6 +195,8 @@ struct ContainerStatusView: View {
         }
     }
 
+    @State private var logPipe: Pipe?
+
     private func startLogStream() {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/local/bin/docker")
@@ -203,32 +205,41 @@ struct ContainerStatusView: View {
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
 
-        pipe.fileHandleForReading.readabilityHandler = { handle in
+        pipe.fileHandleForReading.readabilityHandler = { [weak pipe] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let line = String(data: data, encoding: .utf8) else { return }
+            guard !data.isEmpty else {
+                // EOF -- clean up handler to prevent tight loop
+                handle.readabilityHandler = nil
+                return
+            }
+            guard let line = String(data: data, encoding: .utf8) else { return }
             for rawLine in line.components(separatedBy: .newlines) where !rawLine.isEmpty {
-                if let entry = parseLogLine(rawLine) {
+                if let entry = self.parseLogLine(rawLine) {
                     Task { @MainActor in
-                        logEntries.append(entry)
+                        self.logEntries.append(entry)
                         switch entry.action {
-                        case "decrypt": decryptCount += 1
-                        case "passthrough": passthroughCount += 1
-                        default: noneCount += 1
+                        case "decrypt": self.decryptCount += 1
+                        case "passthrough": self.passthroughCount += 1
+                        default: self.noneCount += 1
                         }
                     }
                 }
             }
+            _ = pipe // prevent unused warning
         }
 
         do {
             try process.run()
             logProcess = process
+            logPipe = pipe
         } catch {
             // Docker not available or container not running
         }
     }
 
     private func stopLogStream() {
+        logPipe?.fileHandleForReading.readabilityHandler = nil
+        logPipe = nil
         logProcess?.terminate()
         logProcess = nil
     }
