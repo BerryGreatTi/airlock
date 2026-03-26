@@ -2,6 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     @State var appState = AppState()
+    @State private var containerService = ContainerSessionService()
+    @State private var orphanedContainers: [String] = []
+    @State private var showingOrphanCleanup = false
 
     var body: some View {
         NavigationSplitView {
@@ -10,6 +13,7 @@ struct ContentView: View {
         } detail: {
             detailContent
         }
+        .environment(\.containerService, containerService)
         .focusedValue(\.appState, appState)
         .onAppear {
             loadState()
@@ -22,9 +26,6 @@ struct ContentView: View {
             Text("\(orphanedContainers.count) container(s) running without a matching workspace. Clean them up?")
         }
     }
-
-    @State private var orphanedContainers: [String] = []
-    @State private var showingOrphanCleanup = false
 
     @ViewBuilder
     private var detailContent: some View {
@@ -124,8 +125,7 @@ struct ContentView: View {
 
     private func reconcileRunningContainers() {
         Task {
-            let service = ContainerSessionService()
-            guard let result = try? await service.status() else { return }
+            guard let result = try? await containerService.status() else { return }
             guard let data = result.stdout.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let workspaces = json["workspaces"] as? [[String: Any]] else { return }
@@ -154,10 +154,9 @@ struct ContentView: View {
 
     private func cleanupOrphans() {
         Task {
-            let cli = CLIService()
             let home = FileManager.default.homeDirectoryForCurrentUser.path
             for id in orphanedContainers {
-                _ = try? await cli.run(args: ["stop", "--id", id], workingDirectory: home)
+                _ = try? await containerService.cli.run(args: ["stop", "--id", id], workingDirectory: home)
             }
             orphanedContainers = []
         }

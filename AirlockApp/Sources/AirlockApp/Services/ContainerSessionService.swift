@@ -1,7 +1,19 @@
 import Foundation
+import SwiftUI
+
+private struct ContainerSessionServiceKey: EnvironmentKey {
+    static let defaultValue = ContainerSessionService()
+}
+
+extension EnvironmentValues {
+    var containerService: ContainerSessionService {
+        get { self[ContainerSessionServiceKey.self] }
+        set { self[ContainerSessionServiceKey.self] = newValue }
+    }
+}
 
 final class ContainerSessionService {
-    private let cli: CLIService
+    let cli: CLIService
 
     init(cli: CLIService = CLIService()) {
         self.cli = cli

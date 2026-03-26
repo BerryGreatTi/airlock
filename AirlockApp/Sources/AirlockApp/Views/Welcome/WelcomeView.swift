@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WelcomeView: View {
     @Bindable var appState: AppState
+    @Environment(\.containerService) private var containerService
     @State private var dockerRunning: Bool?
     @State private var showingNewWorkspace = false
 
@@ -70,7 +71,6 @@ struct WelcomeView: View {
     }
 
     private func checkDocker() async {
-        let service = ContainerSessionService()
-        dockerRunning = await service.isDockerRunning()
+        dockerRunning = await containerService.isDockerRunning()
     }
 }

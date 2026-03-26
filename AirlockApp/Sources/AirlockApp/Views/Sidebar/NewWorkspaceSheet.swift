@@ -10,6 +10,7 @@ private struct PreCheck: Identifiable {
 struct NewWorkspaceSheet: View {
     @Bindable var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.containerService) private var containerService
     @State private var selectedPath: String = ""
     @State private var envFilePath: String = ""
     @State private var statusMessage: String = ""
@@ -106,7 +107,6 @@ struct NewWorkspaceSheet: View {
         }
         let fm = FileManager.default
         let cli = CLIService()
-        let service = ContainerSessionService()
 
         var results: [PreCheck] = []
 
@@ -133,7 +133,7 @@ struct NewWorkspaceSheet: View {
         ))
         checks = results
 
-        let dockerOK = await service.isDockerRunning()
+        let dockerOK = await containerService.isDockerRunning()
         if let idx = checks.firstIndex(where: { $0.id == "docker" }) {
             checks[idx].passed = dockerOK
             checks[idx].detail = dockerOK ? nil : "start Docker Desktop"
