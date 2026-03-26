@@ -9,6 +9,8 @@ enum SessionStatus: Equatable {
 
 enum DetailTab: Hashable {
     case terminal
+    case secrets
+    case containers
     case diff
     case settings
 }
@@ -17,8 +19,7 @@ enum DetailTab: Hashable {
 final class AppState {
     var workspaces: [Workspace] = []
     var selectedWorkspaceID: UUID?
-    var activeWorkspaceID: UUID?
-    var sessionStatus: SessionStatus = .stopped
+    var activeWorkspaceIDs: Set<UUID> = []
     var selectedTab: DetailTab = .terminal
     var lastError: String?
 
@@ -26,12 +27,16 @@ final class AppState {
         workspaces.first { $0.id == selectedWorkspaceID }
     }
 
-    var activeWorkspace: Workspace? {
-        workspaces.first { $0.id == activeWorkspaceID }
+    func isActive(_ workspace: Workspace) -> Bool {
+        activeWorkspaceIDs.contains(workspace.id)
     }
 
-    var isRunning: Bool {
-        sessionStatus == .running
+    func statusFor(_ workspace: Workspace) -> SessionStatus {
+        guard let ws = workspaces.first(where: { $0.id == workspace.id }) else { return .stopped }
+        if activeWorkspaceIDs.contains(ws.id) {
+            return ws.isActive ? .running : .error("activation failed")
+        }
+        return .stopped
     }
 }
 

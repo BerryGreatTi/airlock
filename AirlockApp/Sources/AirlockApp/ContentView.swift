@@ -35,6 +35,8 @@ struct ContentView: View {
     private var tabBar: some View {
         HStack(spacing: 0) {
             tabButton("Terminal", tab: .terminal, icon: "terminal")
+            tabButton("Secrets", tab: .secrets, icon: "key")
+            tabButton("Containers", tab: .containers, icon: "shippingbox")
             tabButton("Diff", tab: .diff, icon: "doc.text.magnifyingglass")
             Spacer()
         }
@@ -47,32 +49,27 @@ struct ContentView: View {
             switch appState.selectedTab {
             case .terminal:
                 TerminalView(workspace: workspace, appState: appState)
+            case .secrets:
+                Text("Secrets tab placeholder")
+            case .containers:
+                Text("Containers tab placeholder")
             case .diff:
                 DiffContainerView(workspace: workspace, appState: appState)
             case .settings:
                 SettingsView(appState: appState)
             }
 
-            // Error banner overlay
-            if case .error(let msg) = appState.sessionStatus {
+            if let error = appState.lastError {
                 VStack {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
-                        Text(msg).font(.caption)
+                        Text(error).font(.caption)
                         Spacer()
                         Button("Dismiss") {
-                            appState.sessionStatus = .stopped
                             appState.lastError = nil
                         }
                         .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        Button("Restart") {
-                            if let ws = appState.selectedWorkspace {
-                                restartWorkspace(ws)
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                     }
                     .padding(8)
@@ -81,14 +78,6 @@ struct ContentView: View {
                     .padding()
                     Spacer()
                 }
-            }
-
-            // Session ended overlay
-            if appState.sessionStatus == .stopped
-                && appState.activeWorkspaceID == nil
-                && appState.lastError == nil
-                && appState.selectedTab == .terminal {
-                // Only show if a session previously ran (not on fresh load)
             }
         }
     }
@@ -103,20 +92,6 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .background(appState.selectedTab == tab ? Color.accentColor.opacity(0.15) : .clear)
-    }
-
-    private func restartWorkspace(_ workspace: Workspace) {
-        Task {
-            let cli = CLIService()
-            _ = try? await cli.run(args: ["stop"], workingDirectory: workspace.path)
-            appState.sessionStatus = .stopped
-            appState.lastError = nil
-
-            // Small delay then restart
-            try? await Task.sleep(for: .milliseconds(500))
-            appState.activeWorkspaceID = workspace.id
-            appState.sessionStatus = .running
-        }
     }
 
     private func loadState() {

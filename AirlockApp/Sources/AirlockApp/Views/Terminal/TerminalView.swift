@@ -14,8 +14,7 @@ struct TerminalView: NSViewRepresentable {
 
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
         let coord = context.coordinator
-        if appState.activeWorkspaceID == workspace.id
-            && appState.sessionStatus == .running
+        if appState.activeWorkspaceIDs.contains(workspace.id)
             && !coord.processStarted
         {
             coord.processStarted = true
@@ -64,12 +63,12 @@ struct TerminalView: NSViewRepresentable {
         func processTerminated(source: SwiftTerm.TerminalView, exitCode: Int32?) {
             Task { @MainActor in
                 if let code = exitCode, code != 0 {
-                    appState.sessionStatus = .error("Process exited with code \(code)")
                     appState.lastError = "Process exited with code \(code)"
-                } else {
-                    appState.sessionStatus = .stopped
                 }
-                appState.activeWorkspaceID = nil
+                appState.activeWorkspaceIDs.remove(workspace.id)
+                if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
+                    appState.workspaces[idx].isActive = false
+                }
             }
         }
     }
