@@ -70,18 +70,26 @@ struct SidebarView: View {
 
     private func activateWorkspace(_ workspace: Workspace) {
         appState.selectedWorkspaceID = workspace.id
-        appState.activeWorkspaceIDs.insert(workspace.id)
-        if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
-            appState.workspaces[idx].isActive = true
-        }
         appState.selectedTab = .terminal
         appState.lastError = nil
+        Task {
+            let service = ContainerSessionService()
+            do {
+                _ = try await service.activate(workspace: workspace)
+                appState.activeWorkspaceIDs.insert(workspace.id)
+                if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
+                    appState.workspaces[idx].isActive = true
+                }
+            } catch {
+                appState.lastError = error.localizedDescription
+            }
+        }
     }
 
     private func deactivateWorkspace(_ workspace: Workspace) {
         Task {
-            let cli = CLIService()
-            _ = try? await cli.run(args: ["stop", "--id", workspace.shortID], workingDirectory: workspace.path)
+            let service = ContainerSessionService()
+            await service.deactivate(workspace: workspace)
             appState.activeWorkspaceIDs.remove(workspace.id)
             if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
                 appState.workspaces[idx].isActive = false
