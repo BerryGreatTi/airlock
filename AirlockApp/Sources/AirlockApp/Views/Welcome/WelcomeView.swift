@@ -43,7 +43,7 @@ struct WelcomeView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { checkDocker() }
+        .task { await checkDocker() }
         .sheet(isPresented: $showingNewWorkspace) {
             NewWorkspaceSheet(appState: appState)
         }
@@ -69,8 +69,8 @@ struct WelcomeView: View {
         }
     }
 
-    private func checkDocker() {
+    private func checkDocker() async {
         let service = ContainerSessionService()
-        dockerRunning = service.isDockerRunning()
+        dockerRunning = await service.isDockerRunning()
     }
 }

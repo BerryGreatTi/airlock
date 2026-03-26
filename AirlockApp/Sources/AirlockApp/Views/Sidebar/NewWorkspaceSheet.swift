@@ -64,8 +64,8 @@ struct NewWorkspaceSheet: View {
         }
         .padding()
         .frame(width: 500)
-        .onChange(of: selectedPath) { _, _ in runPreChecks() }
-        .onChange(of: envFilePath) { _, _ in runPreChecks() }
+        .onChange(of: selectedPath) { _, _ in Task { await runPreChecks() } }
+        .onChange(of: envFilePath) { _, _ in Task { await runPreChecks() } }
     }
 
     private var preCheckList: some View {
@@ -99,7 +99,7 @@ struct NewWorkspaceSheet: View {
         checks.first(where: { $0.id == "dir" })?.passed ?? false
     }
 
-    private func runPreChecks() {
+    private func runPreChecks() async {
         guard !selectedPath.isEmpty else {
             checks = []
             return
@@ -125,13 +125,19 @@ struct NewWorkspaceSheet: View {
             detail: initialized ? nil : "will run airlock init"
         ))
 
-        let dockerOK = service.isDockerRunning()
+        // Show synchronous checks immediately, Docker check updates async
         results.append(PreCheck(
             id: "docker",
             label: "Docker running",
-            passed: dockerOK,
-            detail: dockerOK ? nil : "start Docker Desktop"
+            passed: nil
         ))
+        checks = results
+
+        let dockerOK = await service.isDockerRunning()
+        if let idx = checks.firstIndex(where: { $0.id == "docker" }) {
+            checks[idx].passed = dockerOK
+            checks[idx].detail = dockerOK ? nil : "start Docker Desktop"
+        }
 
         if !envFilePath.isEmpty {
             let envContent = (try? String(contentsOfFile: envFilePath, encoding: .utf8)) ?? ""
@@ -146,7 +152,7 @@ struct NewWorkspaceSheet: View {
                     return sensitivePatterns.contains(where: { key.contains($0) }) && !value.hasPrefix("ENC[age:")
                 }
             if hasPlaintext {
-                results.append(PreCheck(
+                checks.append(PreCheck(
                     id: "secrets",
                     label: "Plaintext secrets detected",
                     passed: false,
@@ -154,8 +160,6 @@ struct NewWorkspaceSheet: View {
                 ))
             }
         }
-
-        checks = results
     }
 
     private func pickDirectory() {

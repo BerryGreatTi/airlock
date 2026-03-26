@@ -32,18 +32,21 @@ final class ContainerSessionService {
         return try await cli.run(args: ["status"], workingDirectory: home)
     }
 
-    func isDockerRunning() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/local/bin/docker")
-        process.arguments = ["info"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
+    func isDockerRunning() async -> Bool {
+        await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/local/bin/docker")
+            process.arguments = ["info"]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { p in
+                continuation.resume(returning: p.terminationStatus == 0)
+            }
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(returning: false)
+            }
         }
     }
 }
