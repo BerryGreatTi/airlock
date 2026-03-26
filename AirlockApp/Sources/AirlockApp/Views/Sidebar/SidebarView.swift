@@ -4,6 +4,8 @@ struct SidebarView: View {
     @Bindable var appState: AppState
     @Environment(\.containerService) private var containerService
     @State private var showingNewWorkspace = false
+    @State private var showingDeactivateConfirmation = false
+    @State private var pendingDeactivation: Workspace?
 
     var body: some View {
         List(selection: $appState.selectedWorkspaceID) {
@@ -19,11 +21,10 @@ struct SidebarView: View {
                     .tag(workspace.id)
                     .contextMenu {
                         if appState.isActive(workspace) {
-                            Button("Deactivate") { deactivateWorkspace(workspace) }
+                            Button("Deactivate") { confirmDeactivate(workspace) }
                             Divider()
                             Button("Stop and Remove", role: .destructive) {
-                                deactivateWorkspace(workspace)
-                                removeWorkspace(workspace)
+                                confirmDeactivate(workspace, thenRemove: true)
                             }
                         } else {
                             Button("Activate") { activateWorkspace(workspace) }
@@ -59,7 +60,28 @@ struct SidebarView: View {
         .sheet(isPresented: $showingNewWorkspace) {
             NewWorkspaceSheet(appState: appState)
         }
+        .alert("Deactivate Workspace?", isPresented: $showingDeactivateConfirmation) {
+            Button("Deactivate", role: .destructive) {
+                if let ws = pendingDeactivation {
+                    let shouldRemove = pendingRemove
+                    deactivateWorkspace(ws)
+                    if shouldRemove { removeWorkspace(ws) }
+                }
+                pendingDeactivation = nil
+                pendingRemove = false
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeactivation = nil
+                pendingRemove = false
+            }
+        } message: {
+            if let ws = pendingDeactivation {
+                Text("This will stop all containers for \"\(ws.name)\".")
+            }
+        }
     }
+
+    @State private var pendingRemove = false
 
     private func statusColor(for workspace: Workspace) -> Color {
         switch appState.statusFor(workspace) {
@@ -67,6 +89,12 @@ struct SidebarView: View {
         case .error: return .red
         case .stopped: return .gray
         }
+    }
+
+    private func confirmDeactivate(_ workspace: Workspace, thenRemove: Bool = false) {
+        pendingDeactivation = workspace
+        pendingRemove = thenRemove
+        showingDeactivateConfirmation = true
     }
 
     private func activateWorkspace(_ workspace: Workspace) {
