@@ -11,8 +11,20 @@ struct ContentView: View {
             detailContent
         }
         .focusedValue(\.appState, appState)
-        .onAppear { loadState() }
+        .onAppear {
+            loadState()
+            reconcileRunningContainers()
+        }
+        .alert("Orphaned Containers Found", isPresented: $showingOrphanCleanup) {
+            Button("Clean Up") { cleanupOrphans() }
+            Button("Ignore", role: .cancel) { orphanedContainers = [] }
+        } message: {
+            Text("\(orphanedContainers.count) container(s) running without a matching workspace. Clean them up?")
+        }
     }
+
+    @State private var orphanedContainers: [String] = []
+    @State private var showingOrphanCleanup = false
 
     @ViewBuilder
     private var detailContent: some View {
@@ -108,5 +120,46 @@ struct ContentView: View {
     private func loadState() {
         let store = WorkspaceStore()
         appState.workspaces = (try? store.loadWorkspaces()) ?? []
+    }
+
+    private func reconcileRunningContainers() {
+        Task {
+            let service = ContainerSessionService()
+            guard let result = try? await service.status() else { return }
+            guard let data = result.stdout.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let workspaces = json["workspaces"] as? [[String: Any]] else { return }
+
+            var orphans: [String] = []
+            for entry in workspaces {
+                guard let entryID = entry["id"] as? String,
+                      let status = entry["status"] as? String,
+                      status == "running" else { continue }
+
+                let matched = appState.workspaces.first { $0.shortID == entryID }
+                if let ws = matched, let idx = appState.workspaces.firstIndex(where: { $0.id == ws.id }) {
+                    appState.activeWorkspaceIDs.insert(ws.id)
+                    appState.workspaces[idx].isActive = true
+                } else {
+                    orphans.append(entryID)
+                }
+            }
+
+            if !orphans.isEmpty {
+                orphanedContainers = orphans
+                showingOrphanCleanup = true
+            }
+        }
+    }
+
+    private func cleanupOrphans() {
+        Task {
+            let cli = CLIService()
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            for id in orphanedContainers {
+                _ = try? await cli.run(args: ["stop", "--id", id], workingDirectory: home)
+            }
+            orphanedContainers = []
+        }
     }
 }
