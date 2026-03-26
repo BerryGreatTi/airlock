@@ -1,7 +1,20 @@
 import SwiftUI
 
+struct AppStateKey: FocusedValueKey {
+    typealias Value = AppState
+}
+
+extension FocusedValues {
+    var appState: AppState? {
+        get { self[AppStateKey.self] }
+        set { self[AppStateKey.self] = newValue }
+    }
+}
+
 @main
 struct AirlockApp: App {
+    @FocusedValue(\.appState) private var appState
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -17,32 +30,57 @@ struct AirlockApp: App {
             }
 
             CommandMenu("Workspace") {
-                Button("Run") {
-                    NotificationCenter.default.post(name: .airlockRunWorkspace, object: nil)
+                Button("Activate") {
+                    guard let state = appState, let ws = state.selectedWorkspace else { return }
+                    state.activeWorkspaceIDs.insert(ws.id)
+                    if let idx = state.workspaces.firstIndex(where: { $0.id == ws.id }) {
+                        state.workspaces[idx].isActive = true
+                    }
                 }
                 .keyboardShortcut("r")
 
-                Button("Stop") {
-                    NotificationCenter.default.post(name: .airlockStopWorkspace, object: nil)
+                Button("Deactivate") {
+                    guard let state = appState, let ws = state.selectedWorkspace else { return }
+                    state.activeWorkspaceIDs.remove(ws.id)
+                    if let idx = state.workspaces.firstIndex(where: { $0.id == ws.id }) {
+                        state.workspaces[idx].isActive = false
+                    }
                 }
                 .keyboardShortcut(".", modifiers: .command)
             }
 
             CommandMenu("View") {
-                Button("Terminal") {
-                    NotificationCenter.default.post(name: .airlockShowTerminal, object: nil)
-                }
-                .keyboardShortcut("1")
+                Button("Terminal") { appState?.selectedTab = .terminal }
+                    .keyboardShortcut("1")
 
-                Button("Diff") {
-                    NotificationCenter.default.post(name: .airlockShowDiff, object: nil)
-                }
-                .keyboardShortcut("2")
+                Button("Secrets") { appState?.selectedTab = .secrets }
+                    .keyboardShortcut("2")
 
-                Button("Refresh Diff") {
-                    NotificationCenter.default.post(name: .airlockRefreshDiff, object: nil)
+                Button("Containers") { appState?.selectedTab = .containers }
+                    .keyboardShortcut("3")
+
+                Button("Diff") { appState?.selectedTab = .diff }
+                    .keyboardShortcut("4")
+
+                Button("Settings") { appState?.selectedTab = .settings }
+                    .keyboardShortcut("5")
+
+                Divider()
+
+                Button("New Terminal") {
+                    NotificationCenter.default.post(name: .airlockNewTerminal, object: nil)
                 }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .keyboardShortcut("t")
+
+                Button("Split Vertical") {
+                    NotificationCenter.default.post(name: .airlockSplitVertical, object: nil)
+                }
+                .keyboardShortcut("d")
+
+                Button("Split Horizontal") {
+                    NotificationCenter.default.post(name: .airlockSplitHorizontal, object: nil)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
             }
         }
 
@@ -56,9 +94,7 @@ struct AirlockApp: App {
 
 extension Notification.Name {
     static let airlockNewWorkspace = Notification.Name("airlockNewWorkspace")
-    static let airlockRunWorkspace = Notification.Name("airlockRunWorkspace")
-    static let airlockStopWorkspace = Notification.Name("airlockStopWorkspace")
-    static let airlockShowTerminal = Notification.Name("airlockShowTerminal")
-    static let airlockShowDiff = Notification.Name("airlockShowDiff")
-    static let airlockRefreshDiff = Notification.Name("airlockRefreshDiff")
+    static let airlockNewTerminal = Notification.Name("airlockNewTerminal")
+    static let airlockSplitVertical = Notification.Name("airlockSplitVertical")
+    static let airlockSplitHorizontal = Notification.Name("airlockSplitHorizontal")
 }

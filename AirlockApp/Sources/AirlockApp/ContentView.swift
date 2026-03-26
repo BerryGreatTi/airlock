@@ -10,6 +10,7 @@ struct ContentView: View {
         } detail: {
             detailContent
         }
+        .focusedValue(\.appState, appState)
         .onAppear { loadState() }
     }
 
