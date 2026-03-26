@@ -50,7 +50,15 @@ struct ContentView: View {
         ZStack {
             switch appState.selectedTab {
             case .terminal:
-                TerminalView(workspace: workspace, appState: appState)
+                if appState.isActive(workspace) {
+                    TerminalSplitView(containerName: workspace.containerName)
+                } else {
+                    ContentUnavailableView {
+                        Label("Workspace Inactive", systemImage: "terminal")
+                    } description: {
+                        Text("Activate this workspace from the sidebar to open a terminal")
+                    }
+                }
             case .secrets:
                 Text("Secrets tab placeholder")
             case .containers:
