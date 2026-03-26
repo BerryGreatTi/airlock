@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var containerService = ContainerSessionService()
     @State private var orphanedContainers: [String] = []
     @State private var showingOrphanCleanup = false
+    @State private var terminalAction: TerminalAction?
 
     var body: some View {
         NavigationSplitView {
@@ -15,6 +16,8 @@ struct ContentView: View {
         }
         .environment(\.containerService, containerService)
         .focusedValue(\.appState, appState)
+        .focusedValue(\.containerService, containerService)
+        .focusedValue(\.terminalAction, $terminalAction)
         .onAppear {
             loadState()
             reconcileRunningContainers()
@@ -65,7 +68,7 @@ struct ContentView: View {
             switch appState.selectedTab {
             case .terminal:
                 if appState.isActive(workspace) {
-                    TerminalSplitView(containerName: workspace.containerName)
+                    TerminalSplitView(containerName: workspace.containerName, action: $terminalAction)
                 } else {
                     ContentUnavailableView {
                         Label("Workspace Inactive", systemImage: "terminal")

@@ -6,6 +6,7 @@ struct TerminalPane: Identifiable {
 
 struct TerminalSplitView: View {
     let containerName: String
+    @Binding var action: TerminalAction?
     @State private var panes: [TerminalPane] = [TerminalPane()]
     @State private var splitVertical = true
 
@@ -16,6 +17,11 @@ struct TerminalSplitView: View {
             toolbar
             Divider()
             terminalGrid
+        }
+        .onChange(of: action) { _, newAction in
+            guard let newAction else { return }
+            handleAction(newAction)
+            action = nil
         }
     }
 
@@ -91,6 +97,19 @@ struct TerminalSplitView: View {
             TerminalView(containerName: containerName) {
                 removePane(pane)
             }
+        }
+    }
+
+    private func handleAction(_ terminalAction: TerminalAction) {
+        switch terminalAction {
+        case .addPane:
+            addPane()
+        case .splitVertical:
+            addPane()
+            splitVertical = true
+        case .splitHorizontal:
+            addPane()
+            splitVertical = false
         }
     }
 
