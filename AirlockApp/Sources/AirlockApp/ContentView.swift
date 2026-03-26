@@ -15,7 +15,9 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailContent: some View {
-        if appState.selectedTab == .settings {
+        if appState.workspaces.isEmpty {
+            WelcomeView(appState: appState)
+        } else if appState.selectedTab == .settings {
             SettingsView(appState: appState)
         } else if let workspace = appState.selectedWorkspace {
             VStack(spacing: 0) {
