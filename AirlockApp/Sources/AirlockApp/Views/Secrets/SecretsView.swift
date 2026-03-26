@@ -37,6 +37,7 @@ struct SecretsView: View {
     let workspace: Workspace
     @Bindable var appState: AppState
     @State private var entries: [EnvEntry] = []
+    @State private var rawLines: [String] = []
     @State private var errorMessage: String?
     @State private var showingAddEntry = false
     @State private var newKey = ""
@@ -194,18 +195,17 @@ struct SecretsView: View {
     private func loadEnvFile(_ path: String) {
         do {
             let content = try String(contentsOfFile: path, encoding: .utf8)
-            entries = content
-                .components(separatedBy: .newlines)
-                .compactMap { line -> EnvEntry? in
-                    let trimmed = line.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return nil }
-                    let parts = trimmed.split(separator: "=", maxSplits: 1)
-                    guard parts.count == 2 else { return nil }
-                    return EnvEntry(
-                        key: String(parts[0]).trimmingCharacters(in: .whitespaces),
-                        value: String(parts[1]).trimmingCharacters(in: .whitespaces)
-                    )
-                }
+            rawLines = content.components(separatedBy: .newlines)
+            entries = rawLines.compactMap { line -> EnvEntry? in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return nil }
+                let parts = trimmed.split(separator: "=", maxSplits: 1)
+                guard parts.count == 2 else { return nil }
+                return EnvEntry(
+                    key: String(parts[0]).trimmingCharacters(in: .whitespaces),
+                    value: String(parts[1]).trimmingCharacters(in: .whitespaces)
+                )
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -223,7 +223,48 @@ struct SecretsView: View {
 
     private func saveEntries() {
         guard let envFile = workspace.envFilePath else { return }
-        let content = entries.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")
-        try? content.write(toFile: envFile, atomically: true, encoding: .utf8)
+
+        // Build lookup of current entries by key
+        var entryMap: [String: String] = [:]
+        for entry in entries {
+            entryMap[entry.key] = entry.value
+        }
+
+        // Rebuild file preserving comments and blank lines
+        var outputLines: [String] = []
+        var writtenKeys: Set<String> = []
+
+        for line in rawLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") {
+                outputLines.append(line)
+                continue
+            }
+            let parts = trimmed.split(separator: "=", maxSplits: 1)
+            if parts.count == 2 {
+                let key = String(parts[0]).trimmingCharacters(in: .whitespaces)
+                if let value = entryMap[key] {
+                    outputLines.append("\(key)=\(value)")
+                    writtenKeys.insert(key)
+                } else {
+                    outputLines.append(line)
+                }
+            } else {
+                outputLines.append(line)
+            }
+        }
+
+        // Append new entries not in original file
+        for entry in entries where !writtenKeys.contains(entry.key) {
+            outputLines.append("\(entry.key)=\(entry.value)")
+        }
+
+        let content = outputLines.joined(separator: "\n")
+        do {
+            try content.write(toFile: envFile, atomically: true, encoding: .utf8)
+            rawLines = outputLines
+        } catch {
+            errorMessage = "Failed to save: \(error.localizedDescription)"
+        }
     }
 }
