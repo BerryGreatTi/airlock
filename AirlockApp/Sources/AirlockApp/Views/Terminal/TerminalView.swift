@@ -76,4 +76,8 @@ final class AirlockTerminalView: LocalProcessTerminalView {
             start()
         }
     }
+
+    static func shellEscape(_ str: String) -> String {
+        "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
 }
