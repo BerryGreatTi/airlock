@@ -65,6 +65,7 @@ struct ContentView: View {
     @ViewBuilder
     private func tabContent(workspace: Workspace) -> some View {
         ZStack {
+            Color.clear
             // Terminal stays alive across tab switches
             Group {
                 if appState.isActive(workspace) {
