@@ -41,6 +41,15 @@ def _make_flow(
     return flow
 
 
+def _add_response(flow, status_code=200, headers=None, content=b""):
+    """Add a mock response to an existing flow."""
+    flow.response = MagicMock()
+    flow.response.status_code = status_code
+    flow.response.headers = dict(headers or {})
+    flow.response.content = content
+    return flow
+
+
 def test_load_mapping():
     from decrypt_proxy import DecryptAddon
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -335,3 +344,75 @@ def test_request_emits_log_on_no_match(capsys):
     captured = capsys.readouterr()
     log = json.loads(captured.out.strip())
     assert log["action"] == "none"
+
+
+# --- Response audit logging tests ---
+
+
+def test_response_emits_log(capsys):
+    addon = _make_addon({})
+    flow = _make_flow(host="api.stripe.com")
+    _add_response(flow, status_code=200, headers={"content-type": "application/json"}, content=b'{"ok":true}')
+    addon.response(flow)
+    captured = capsys.readouterr()
+    log = json.loads(captured.out.strip())
+    assert log["host"] == "api.stripe.com"
+    assert log["action"] == "response"
+    assert "status:200" in log["location"]
+    assert "type:application/json" in log["key"]
+    assert "size:11" in log["key"]
+
+
+def test_response_logs_passthrough_host(capsys):
+    addon = _make_addon({}, passthrough=["api.anthropic.com"])
+    flow = _make_flow(host="api.anthropic.com")
+    _add_response(flow, status_code=200, headers={"content-type": "text/event-stream"}, content=b"data: chunk")
+    addon.response(flow)
+    captured = capsys.readouterr()
+    log = json.loads(captured.out.strip())
+    assert log["action"] == "response"
+    assert log["host"] == "api.anthropic.com"
+
+
+def test_response_handles_none_content(capsys):
+    addon = _make_addon({})
+    flow = _make_flow(host="api.example.com")
+    _add_response(flow, status_code=204, headers={}, content=None)
+    addon.response(flow)
+    captured = capsys.readouterr()
+    log = json.loads(captured.out.strip())
+    assert log["action"] == "response"
+    assert "status:204" in log["location"]
+    assert "size:0" in log["key"]
+
+
+def test_response_handles_missing_content_type(capsys):
+    addon = _make_addon({})
+    flow = _make_flow(host="api.example.com")
+    _add_response(flow, status_code=200, headers={}, content=b"data")
+    addon.response(flow)
+    captured = capsys.readouterr()
+    log = json.loads(captured.out.strip())
+    assert log["action"] == "response"
+    assert "type:" in log["key"]
+    assert "size:4" in log["key"]
+
+
+def test_response_logs_error_status(capsys):
+    addon = _make_addon({})
+    flow = _make_flow(host="api.example.com")
+    _add_response(flow, status_code=500, headers={"content-type": "text/plain"}, content=b"Internal Server Error")
+    addon.response(flow)
+    captured = capsys.readouterr()
+    log = json.loads(captured.out.strip())
+    assert log["action"] == "response"
+    assert "status:500" in log["location"]
+
+
+def test_response_does_not_log_body_content(capsys):
+    addon = _make_addon({})
+    flow = _make_flow(host="api.example.com")
+    _add_response(flow, status_code=200, headers={"content-type": "application/json"}, content=b'{"secret":"supersecret123"}')
+    addon.response(flow)
+    captured = capsys.readouterr()
+    assert "supersecret123" not in captured.out

@@ -122,6 +122,19 @@ class DecryptAddon:
         if not decrypted:
             self._emit_log(host, "none")
 
+    def response(self, flow: http.HTTPFlow) -> None:
+        """Log response metadata for audit trail. Never logs response body."""
+        host = flow.request.pretty_host
+        status = flow.response.status_code
+        content_type = flow.response.headers.get("content-type", "")
+        size = len(flow.response.content) if flow.response.content else 0
+        self._emit_log(
+            host,
+            "response",
+            location=f"status:{status}",
+            key=f"type:{content_type},size:{size}",
+        )
+
 
 # Only instantiate when loaded by mitmproxy, not during tests
 if "pytest" not in sys.modules and "unittest" not in sys.modules:
