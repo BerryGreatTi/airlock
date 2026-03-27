@@ -152,13 +152,13 @@ The GUI now supports non-default Docker installations via auto-detection:
 | Issue | Severity | GitHub |
 |-------|----------|--------|
 | Terminal rendering unstable on initial load | Minor | #2 |
-| Korean/CJK input not supported in container | Minor | #3 |
-| Terminal pane ratio not configurable | Minor | #4 |
-| Split direction change destroys terminals | Medium | #5 |
-| Rapid tab switching causes UI flicker | Minor | #6 |
+| Korean/CJK input not supported in container | ~~Minor~~ Resolved | #3 -- Fixed in PR #11 (LANG=C.UTF-8) |
+| Terminal pane ratio not configurable | ~~Minor~~ Resolved | #4 -- Fixed in PR #12 (NSSplitViewRepresentable) |
+| Split direction change destroys terminals | ~~Medium~~ Resolved | #5 -- Fixed in PR #12 (NSSplitViewRepresentable) |
+| Rapid tab switching causes UI flicker | ~~Minor~~ Resolved | #6 -- Fixed in PR #13 (tab debounce) |
 | Tab bar shifts after deactivate | Minor | #7 |
 | mitmproxy CA cert not auto-trusted in agent container | ~~Medium~~ Resolved | Fixed in revision below |
-| Activate from Terminal tab causes transient error | Minor | #10 |
+| Activate from Terminal tab causes transient error | ~~Minor~~ Resolved | #10 -- Fixed in PR #13 (ActivationState) |
 
 ## Revision (2026-03-27): Proxy E2E verification -- 9/9 automated, 10/10 GUI manual
 
@@ -194,3 +194,31 @@ Added `test/e2e-proxy.sh` (9 tests) runnable via `make test-e2e`. Requires Docke
 - Single/double quoted .env values stripped and decrypted
 - Anthropic API passthrough (no decryption)
 - Proxy structured JSON logging
+
+## Revision (2026-03-27): Resolve all remaining GUI issues -- 5/5 closed
+
+Parallel resolution of all 5 open GUI issues across 3 PRs (#11, #12, #13), using agent team with git worktrees for isolated development.
+
+### Architectural changes
+
+1. **NSSplitViewRepresentable replaces HSplitView/VSplitView conditional (PR #12).** The conditional `if splitVertical { HSplitView } else { VSplitView }` caused SwiftUI to destroy and recreate all terminal views on direction change, killing docker exec processes. Replaced with a custom `NSViewRepresentable` wrapping `NSSplitView` directly. Toggling `NSSplitView.isVertical` preserves all subviews and running processes. Also enables programmatic pane equalization via `setPosition(_:ofDividerAt:)`.
+
+2. **ActivationState enum replaces binary activeWorkspaceIDs (PR #13).** `activeWorkspaceIDs: Set<UUID>` was a binary active/inactive model. Replaced with `activationStates: [UUID: ActivationState]` supporting three states: `.inactive`, `.activating`, `.active`. Container readiness is verified by polling `docker exec <name> true` before transitioning to `.active`. A `ProgressView` is shown during the `.activating` phase, preventing the terminal from attempting `docker exec` before the container is ready.
+
+3. **Tab switch debounce (PR #13).** `AppState.switchTab(to:)` replaces direct `selectedTab` assignment. Uses `Task.sleep(for: .milliseconds(150))` with cancellation to coalesce rapid tab changes into a single state update.
+
+4. **Container UTF-8 locale (PR #11).** `LANG=C.UTF-8` set at three levels: Dockerfile `ENV`, `BuildClaudeConfig()` container API env, and `.airlock-env.sh` for docker exec sessions. `C.UTF-8` is built into glibc on Debian bookworm -- no `locales` package needed.
+
+### Issues resolved
+
+| PR | Issues | Change |
+|----|--------|--------|
+| #11 | #3 (Korean input) | `LANG=C.UTF-8` in Dockerfile, manager.go, entrypoint-keepalive.sh |
+| #12 | #5 (split destroys sessions), #4 (pane ratio) | `NSSplitViewRepresentable` wrapping `NSSplitView` |
+| #13 | #10 (activation timing), #6 (rapid tab switch) | `ActivationState` enum, readiness polling, tab debounce |
+
+### Spec gaps updated
+
+- ~~Secrets tab: Export button, per-row View/Edit actions, Key Info section~~ (still pending)
+- ~~Pre-checks: Container image existence check~~ (still pending)
+- ~~Terminal split: no 2x2 grid layout for 4 panes~~ (still pending, but pane equalization now works)

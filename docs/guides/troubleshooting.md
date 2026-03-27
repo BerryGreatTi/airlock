@@ -27,6 +27,13 @@ cd ~/your-project
 git init && git add -A && git commit -m "initial"
 ```
 
+### Korean/CJK input not working in terminal
+
+The container has `LANG=C.UTF-8` set by default (since PR #11). If Korean or other CJK characters are garbled:
+1. Verify locale inside the container: `docker exec airlock-claude-{id} bash -c 'echo $LANG'` -- should print `C.UTF-8`
+2. If using a custom Dockerfile, ensure `ENV LANG=C.UTF-8` is set
+3. Rebuild images if they predate the fix: `make docker-build`
+
 ### Terminals not opening after activation
 
 The workspace must be in "Running" (green dot) state. If activation failed silently:
