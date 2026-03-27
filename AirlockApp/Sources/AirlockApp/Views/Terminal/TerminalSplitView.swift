@@ -48,6 +48,30 @@ struct TerminalSplitView: View {
             }
             .disabled(panes.count < 2)
 
+            Divider().frame(height: 16)
+
+            ForEach(Array(panes.enumerated()), id: \.element.id) { index, pane in
+                HStack(spacing: 2) {
+                    Text("T\(index + 1)")
+                        .font(.caption)
+                        .fontDesign(.monospaced)
+                    if panes.count > 1 {
+                        Button {
+                            removePane(id: pane.id)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+
             Spacer()
 
             Text("\(panes.count) terminal\(panes.count == 1 ? "" : "s")")
@@ -59,43 +83,15 @@ struct TerminalSplitView: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
-    @ViewBuilder
     private var terminalGrid: some View {
-        if splitVertical {
-            HSplitView {
-                ForEach(panes) { pane in
-                    singleTerminal(pane: pane)
-                }
+        NSSplitViewRepresentable(
+            paneIDs: panes.map(\.id),
+            isVertical: splitVertical,
+            containerName: containerName,
+            onPaneTerminated: { id in
+                removePane(id: id)
             }
-        } else {
-            VSplitView {
-                ForEach(panes) { pane in
-                    singleTerminal(pane: pane)
-                }
-            }
-        }
-    }
-
-    private func singleTerminal(pane: TerminalPane) -> some View {
-        VStack(spacing: 0) {
-            if panes.count > 1 {
-                HStack {
-                    Spacer()
-                    Button {
-                        removePane(pane)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption2)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(2)
-                }
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-            }
-            TerminalView(containerName: containerName) {
-                removePane(pane)
-            }
-        }
+        )
     }
 
     private func handleAction(_ terminalAction: TerminalAction) {
@@ -116,8 +112,8 @@ struct TerminalSplitView: View {
         panes.append(TerminalPane())
     }
 
-    private func removePane(_ pane: TerminalPane) {
+    private func removePane(id: UUID) {
         guard panes.count > 1 else { return }
-        panes.removeAll { $0.id == pane.id }
+        panes.removeAll { $0.id == id }
     }
 }
