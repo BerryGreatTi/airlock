@@ -10,25 +10,20 @@ struct TerminalView: NSViewRepresentable {
         self.onTerminated = onTerminated
     }
 
-    func makeNSView(context: Context) -> LocalProcessTerminalView {
-        let terminal = LocalProcessTerminalView(frame: .zero)
+    func makeNSView(context: Context) -> AirlockTerminalView {
+        let terminal = AirlockTerminalView(frame: .zero)
         terminal.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         terminal.processDelegate = context.coordinator
         return terminal
     }
 
-    func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
+    func updateNSView(_ terminal: AirlockTerminalView, context: Context) {
         let coord = context.coordinator
         if !coord.processStarted {
             coord.processStarted = true
             let cmd = "docker exec -it \(shellEscape(containerName)) /bin/bash"
             let env = CLIService.enrichedEnvironment().map { "\($0.key)=\($0.value)" }
-            terminal.startProcess(
-                executable: "/bin/bash",
-                args: ["-c", cmd],
-                environment: env,
-                execName: "docker"
-            )
+            terminal.startAfterLayout(cmd: cmd, env: env)
         }
     }
 
@@ -56,6 +51,29 @@ struct TerminalView: NSViewRepresentable {
             Task { @MainActor in
                 onTerminated?()
             }
+        }
+    }
+}
+
+/// Defers process start until the view has a non-zero frame from layout.
+final class AirlockTerminalView: LocalProcessTerminalView {
+    private var pendingStart: (() -> Void)?
+
+    func startAfterLayout(cmd: String, env: [String]) {
+        if frame.size.width > 0, frame.size.height > 0 {
+            startProcess(executable: "/bin/bash", args: ["-c", cmd], environment: env, execName: "docker")
+        } else {
+            pendingStart = { [weak self] in
+                self?.startProcess(executable: "/bin/bash", args: ["-c", cmd], environment: env, execName: "docker")
+            }
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        if let start = pendingStart, frame.size.width > 0, frame.size.height > 0 {
+            pendingStart = nil
+            start()
         }
     }
 }
