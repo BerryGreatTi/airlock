@@ -14,5 +14,8 @@ AirlockApp/.build/
 AirlockApp/.swiftpm/
 *.xcuserstate
 
+# Worktrees
+.worktrees/
+
 # Local setting files
 .claude/settings.local.json
