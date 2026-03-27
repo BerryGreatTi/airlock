@@ -30,7 +30,7 @@ final class AppStateTests: XCTestCase {
         var ws2 = Workspace(name: "b", path: "/b")
         ws2.isActive = true
         state.workspaces = [ws1, ws2]
-        state.activeWorkspaceIDs = [ws2.id]
+        state.activationStates[ws2.id] = .active
         XCTAssertFalse(state.isActive(ws1))
         XCTAssertTrue(state.isActive(ws2))
     }
@@ -40,7 +40,7 @@ final class AppStateTests: XCTestCase {
         var ws = Workspace(name: "test", path: "/tmp")
         ws.isActive = true
         state.workspaces = [ws]
-        state.activeWorkspaceIDs = [ws.id]
+        state.activationStates[ws.id] = .active
         XCTAssertEqual(state.statusFor(ws), .running)
     }
 
@@ -56,7 +56,7 @@ final class AppStateTests: XCTestCase {
         var ws = Workspace(name: "test", path: "/tmp")
         ws.isActive = false
         state.workspaces = [ws]
-        state.activeWorkspaceIDs = [ws.id]
+        state.activationStates[ws.id] = .active
         XCTAssertEqual(state.statusFor(ws), .error("activation failed"))
     }
 
