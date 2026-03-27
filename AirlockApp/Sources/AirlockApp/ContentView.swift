@@ -69,9 +69,20 @@ struct ContentView: View {
             Color.clear
             // Terminal stays alive across tab switches
             Group {
-                if appState.isActive(workspace) {
+                switch appState.activationState(for: workspace) {
+                case .active:
                     TerminalSplitView(containerName: workspace.containerName, action: $terminalAction)
-                } else {
+                case .activating:
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .controlSize(.large)
+                        Text("Activating workspace...")
+                            .font(.headline)
+                        Text("Starting containers and waiting for readiness")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .inactive:
                     ContentUnavailableView {
                         Label("Workspace Inactive", systemImage: "terminal")
                     } description: {
@@ -120,7 +131,7 @@ struct ContentView: View {
 
     private func tabButton(_ title: String, tab: DetailTab, icon: String) -> some View {
         Button {
-            appState.selectedTab = tab
+            appState.switchTab(to: tab)
         } label: {
             Label(title, systemImage: icon)
                 .padding(.horizontal, 12)
@@ -150,7 +161,7 @@ struct ContentView: View {
 
                 let matched = appState.workspaces.first { $0.shortID == entryID }
                 if let ws = matched, let idx = appState.workspaces.firstIndex(where: { $0.id == ws.id }) {
-                    appState.activeWorkspaceIDs.insert(ws.id)
+                    appState.activationStates[ws.id] = .active
                     appState.workspaces[idx].isActive = true
                 } else {
                     orphans.append(entryID)
