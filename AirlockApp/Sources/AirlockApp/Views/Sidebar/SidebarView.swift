@@ -27,6 +27,9 @@ struct SidebarView: View {
                             Button("Stop and Remove", role: .destructive) {
                                 confirmDeactivate(workspace, thenRemove: true)
                             }
+                        } else if appState.isActivating(workspace) {
+                            Button("Activating...") { }
+                                .disabled(true)
                         } else {
                             Button("Activate") { activateWorkspace(workspace) }
                             Divider()
@@ -85,10 +88,10 @@ struct SidebarView: View {
     @State private var pendingRemove = false
 
     private func statusColor(for workspace: Workspace) -> Color {
-        switch appState.statusFor(workspace) {
-        case .running: return .green
-        case .error: return .red
-        case .stopped: return .gray
+        switch appState.activationState(for: workspace) {
+        case .active: return .green
+        case .activating: return .yellow
+        case .inactive: return .gray
         }
     }
 
@@ -101,34 +104,21 @@ struct SidebarView: View {
     private func activateWorkspace(_ workspace: Workspace) {
         appState.selectedWorkspaceID = workspace.id
         appState.selectedTab = .terminal
-        appState.lastError = nil
         Task { @MainActor in
-            do {
-                _ = try await containerService.activate(workspace: workspace)
-                appState.activeWorkspaceIDs.insert(workspace.id)
-                if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
-                    appState.workspaces[idx].isActive = true
-                }
-            } catch {
-                appState.lastError = error.localizedDescription
-            }
+            await appState.performActivation(workspace: workspace, using: containerService)
         }
     }
 
     private func deactivateWorkspace(_ workspace: Workspace) {
         Task { @MainActor in
-            await containerService.deactivate(workspace: workspace)
-            appState.activeWorkspaceIDs.remove(workspace.id)
-            if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
-                appState.workspaces[idx].isActive = false
-            }
+            await appState.performDeactivation(workspace: workspace, using: containerService)
         }
     }
 
     @MainActor
     private func removeWorkspace(_ workspace: Workspace) {
         appState.workspaces.removeAll { $0.id == workspace.id }
-        appState.activeWorkspaceIDs.remove(workspace.id)
+        appState.activationStates.removeValue(forKey: workspace.id)
         try? WorkspaceStore().saveWorkspaces(appState.workspaces)
     }
 }

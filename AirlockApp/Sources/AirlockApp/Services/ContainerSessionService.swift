@@ -67,4 +67,48 @@ final class ContainerSessionService {
             }
         }
     }
+
+    func activateAndWaitReady(workspace: Workspace) async throws -> CLIResult {
+        let result = try await activate(workspace: workspace)
+        try await waitForContainerReady(containerName: workspace.containerName)
+        return result
+    }
+
+    func waitForContainerReady(
+        containerName: String,
+        timeout: Duration = .seconds(10)
+    ) async throws {
+        let start = ContinuousClock.now
+        while ContinuousClock.now - start < timeout {
+            if await canExec(containerName: containerName) {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        throw NSError(
+            domain: "ContainerSession",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Container not ready after \(timeout)"]
+        )
+    }
+
+    private func canExec(containerName: String) async -> Bool {
+        guard let dockerPath = CLIService.findInPath("docker") else { return false }
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: dockerPath)
+            process.arguments = ["exec", containerName, "true"]
+            process.environment = CLIService.enrichedEnvironment()
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { p in
+                continuation.resume(returning: p.terminationStatus == 0)
+            }
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(returning: false)
+            }
+        }
+    }
 }

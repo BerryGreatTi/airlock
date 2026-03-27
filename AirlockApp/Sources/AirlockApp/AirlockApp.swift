@@ -64,15 +64,7 @@ struct AirlockApp: App {
                     guard let state = appState, let ws = state.selectedWorkspace,
                           let service = containerService else { return }
                     Task { @MainActor in
-                        do {
-                            _ = try await service.activate(workspace: ws)
-                            state.activeWorkspaceIDs.insert(ws.id)
-                            if let idx = state.workspaces.firstIndex(where: { $0.id == ws.id }) {
-                                state.workspaces[idx].isActive = true
-                            }
-                        } catch {
-                            state.lastError = error.localizedDescription
-                        }
+                        await state.performActivation(workspace: ws, using: service)
                     }
                 }
                 .keyboardShortcut("r")
@@ -81,30 +73,26 @@ struct AirlockApp: App {
                     guard let state = appState, let ws = state.selectedWorkspace,
                           let service = containerService else { return }
                     Task { @MainActor in
-                        await service.deactivate(workspace: ws)
-                        state.activeWorkspaceIDs.remove(ws.id)
-                        if let idx = state.workspaces.firstIndex(where: { $0.id == ws.id }) {
-                            state.workspaces[idx].isActive = false
-                        }
+                        await state.performDeactivation(workspace: ws, using: service)
                     }
                 }
                 .keyboardShortcut(".", modifiers: .command)
             }
 
             CommandMenu("View") {
-                Button("Terminal") { appState?.selectedTab = .terminal }
+                Button("Terminal") { appState?.switchTab(to: .terminal) }
                     .keyboardShortcut("1")
 
-                Button("Secrets") { appState?.selectedTab = .secrets }
+                Button("Secrets") { appState?.switchTab(to: .secrets) }
                     .keyboardShortcut("2")
 
-                Button("Containers") { appState?.selectedTab = .containers }
+                Button("Containers") { appState?.switchTab(to: .containers) }
                     .keyboardShortcut("3")
 
-                Button("Diff") { appState?.selectedTab = .diff }
+                Button("Diff") { appState?.switchTab(to: .diff) }
                     .keyboardShortcut("4")
 
-                Button("Settings") { appState?.selectedTab = .settings }
+                Button("Settings") { appState?.switchTab(to: .settings) }
                     .keyboardShortcut("5")
 
                 Divider()
