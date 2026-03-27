@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -55,34 +54,31 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 		TmpDir:    tmpDir,
 	}
 
-	if envFile != "" {
-		kp, err := crypto.LoadKeyPair(keysDir)
+	kp, kpErr := crypto.LoadKeyPair(keysDir)
+	if kpErr == nil {
+		scanners := []secrets.Scanner{
+			secrets.NewClaudeScanner(),
+		}
+		if envFile != "" {
+			scanners = append(scanners, secrets.NewEnvScanner(envFile, workspace))
+		}
+		scanResult, err := secrets.ScanAll(scanners, secrets.ScanOpts{
+			Workspace:  workspace,
+			HomeDir:    homeDir,
+			PublicKey:  kp.PublicKey,
+			PrivateKey: kp.PrivateKey,
+			TmpDir:     tmpDir,
+		})
 		if err != nil {
-			return nil, fmt.Errorf("load keypair: %w", err)
+			return nil, fmt.Errorf("scan secrets: %w", err)
 		}
-		entries, err := secrets.ParseEnvFile(envFile)
-		if err != nil {
-			return nil, fmt.Errorf("parse env file: %w", err)
-		}
-		result, err := secrets.EncryptEntries(entries, kp.PublicKey, kp.PrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("encrypt entries: %w", err)
-		}
-		params.EnvFilePath = filepath.Join(tmpDir, "env.enc")
-		if err := secrets.WriteEnvFile(params.EnvFilePath, result.Encrypted); err != nil {
-			return nil, fmt.Errorf("write encrypted env: %w", err)
-		}
-		mappingPath, mappingErr := secrets.SaveMapping(result.Mapping, tmpDir)
-		if mappingErr != nil {
-			return nil, fmt.Errorf("save mapping: %w", mappingErr)
-		}
-		params.MappingPath = mappingPath
-		absEnvFile, absErr := filepath.Abs(envFile)
-		if absErr == nil {
-			rel, relErr := filepath.Rel(workspace, absEnvFile)
-			if relErr == nil && !strings.HasPrefix(rel, "..") {
-				params.EnvShadowPath = "/workspace/" + filepath.ToSlash(rel)
+		params.ShadowMounts = scanResult.Mounts
+		if len(scanResult.Mapping) > 0 {
+			mappingPath, mappingErr := secrets.SaveMapping(scanResult.Mapping, tmpDir)
+			if mappingErr != nil {
+				return nil, fmt.Errorf("save mapping: %w", mappingErr)
 			}
+			params.MappingPath = mappingPath
 		}
 	}
 
