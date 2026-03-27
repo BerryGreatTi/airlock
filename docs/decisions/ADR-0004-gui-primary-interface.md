@@ -82,3 +82,37 @@ Rejected. Swift has no age encryption library (filippo.io/age is Go-only) and no
 ### Cross-platform GUI (Electron/Tauri) instead of SwiftUI
 
 Deferred. This is a valid future direction for Linux GUI support, but is a separate decision. This ADR only changes the priority of GUI vs CLI, not the GUI technology.
+
+## Revision (2026-03-27): GUI-primary implementation complete (Tasks 6-15)
+
+PR #1 merged to main. The GUI-primary redesign is now implemented across 14 Swift files (+1262/-151 lines). Three rounds of code review identified and resolved issues before merge.
+
+### What was implemented
+
+- **Multi-workspace support**: `activeWorkspaceIDs: Set<UUID>` replaces single `activeWorkspaceID`. Multiple workspaces can run simultaneously with independent green status dots.
+- **Container-based terminals**: `TerminalView` now spawns `docker exec -it` into running containers instead of `airlock run`. Split-pane support (up to 4 panes) with Cmd+T/D/Shift+D.
+- **ContainerSessionService**: New service layer wrapping CLIService for activate/deactivate/status/Docker health check. Shared as a single instance via `@Environment`.
+- **Secrets management tab**: Table view of .env entries with encrypted/plaintext/not-secret status. Add Entry, Encrypt All actions. Preserves .env file comments on save.
+- **Container status tab**: Agent/proxy/network cards with live proxy activity log streamed from `docker logs --follow` with JSON parsing.
+- **Welcome screen**: First-launch experience with Docker status check and create-workspace button.
+- **Pre-checks on workspace creation**: Directory exists, .airlock initialized, Docker running, plaintext secrets warning.
+- **Crash recovery**: On app launch, reconcile running containers via `airlock status`, orphan cleanup dialog.
+- **Menu bar**: FocusedValue-based commands with Cmd+1-5 tab shortcuts, Cmd+R activate, Cmd+. deactivate.
+
+### Design decisions made during implementation
+
+1. **FocusedValue over NotificationCenter for menu commands.** Tab switching (Cmd+1-5), Activate/Deactivate, and terminal split commands all use SwiftUI's `FocusedValue` pattern. NotificationCenter was initially used for terminal actions but was replaced during review for consistency. Only `airlockNewWorkspace` notification remains (sidebar-scoped).
+
+2. **ContainerSessionService shared via @Environment.** A single instance is created in `ContentView` and propagated via both `@Environment(\.containerService)` (for child views) and `@FocusedValue(\.containerService)` (for menu bar commands). This prevents race conditions from concurrent activations.
+
+3. **@MainActor on AppState.** `AppState` is annotated `@Observable @MainActor` to guarantee all UI state mutations happen on the main actor. This was a code review finding -- without it, post-`await` mutations in `Task { }` blocks had no main actor guarantee.
+
+4. **Async Docker health check.** `isDockerRunning()` uses `Process.terminationHandler` with `withCheckedContinuation` instead of synchronous `waitUntilExit()`, preventing UI freezes during workspace creation pre-checks.
+
+### Spec gaps remaining
+
+The following spec features are not yet implemented and are tracked for future work:
+
+- Secrets tab: Export button, per-row View/Edit actions, Key Info section (public key, creation date)
+- Pre-checks: Container image existence check (`airlock-claude:latest`, `airlock-proxy:latest`)
+- Terminal split: Cmd+D/Shift+D adds a pane and sets direction (implemented), but no 2x2 grid layout for 4 panes
