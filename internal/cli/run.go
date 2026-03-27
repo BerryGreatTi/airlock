@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -77,6 +78,13 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 			params.MappingPath, mappingErr = secrets.SaveMapping(result.Mapping, tmpDir)
 			if mappingErr != nil {
 				return fmt.Errorf("save mapping: %w", mappingErr)
+			}
+			absEnvFile, absErr := filepath.Abs(runEnvFile)
+			if absErr == nil {
+				rel, relErr := filepath.Rel(workspace, absEnvFile)
+				if relErr == nil && !strings.HasPrefix(rel, "..") {
+					params.EnvShadowPath = "/workspace/" + filepath.ToSlash(rel)
+				}
 			}
 		}
 

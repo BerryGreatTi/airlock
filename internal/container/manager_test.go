@@ -483,3 +483,77 @@ func TestBuildProxyConfigMappingEnv(t *testing.T) {
 		t.Errorf("expected custom mapping path in bind, got: %s", cfg.Binds[0])
 	}
 }
+
+func TestBuildClaudeConfigEnvShadowBind(t *testing.T) {
+	opts := container.RunOpts{
+		Workspace:     "/home/user/project",
+		Image:         "airlock-claude:latest",
+		NetworkName:   "airlock-net",
+		ClaudeDir:     "/home/user/.claude",
+		ProxyPort:     8080,
+		EnvFilePath:   "/tmp/airlock-xyz/env.enc",
+		EnvShadowPath: "/workspace/.env",
+	}
+	cfg := container.BuildClaudeConfig(opts)
+
+	// workspace + .claude + env.enc + shadow = 4
+	if len(cfg.Binds) != 4 {
+		t.Errorf("expected 4 binds with shadow, got %d: %v", len(cfg.Binds), cfg.Binds)
+	}
+	foundShadow := false
+	for _, bind := range cfg.Binds {
+		if strings.Contains(bind, "/workspace/.env") && strings.HasSuffix(bind, ":ro") {
+			foundShadow = true
+			if !strings.HasPrefix(bind, "/tmp/airlock-xyz/env.enc:") {
+				t.Errorf("shadow bind should map env.enc, got: %s", bind)
+			}
+		}
+	}
+	if !foundShadow {
+		t.Errorf("shadow bind not found in: %v", cfg.Binds)
+	}
+}
+
+func TestBuildClaudeConfigNoShadowWhenEmpty(t *testing.T) {
+	opts := container.RunOpts{
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   8080,
+		EnvFilePath: "/tmp/env.enc",
+	}
+	cfg := container.BuildClaudeConfig(opts)
+
+	if len(cfg.Binds) != 3 {
+		t.Errorf("expected 3 binds without shadow, got %d: %v", len(cfg.Binds), cfg.Binds)
+	}
+	for _, bind := range cfg.Binds {
+		if strings.Contains(bind, "/workspace/.env") {
+			t.Errorf("should not have shadow bind: %s", bind)
+		}
+	}
+}
+
+func TestBuildClaudeConfigEnvShadowSubdirectory(t *testing.T) {
+	opts := container.RunOpts{
+		Workspace:     "/home/user/project",
+		Image:         "airlock-claude:latest",
+		NetworkName:   "airlock-net",
+		ClaudeDir:     "/home/user/.claude",
+		ProxyPort:     8080,
+		EnvFilePath:   "/tmp/airlock-xyz/env.enc",
+		EnvShadowPath: "/workspace/config/.env.production",
+	}
+	cfg := container.BuildClaudeConfig(opts)
+
+	foundShadow := false
+	for _, bind := range cfg.Binds {
+		if strings.Contains(bind, "/workspace/config/.env.production:ro") {
+			foundShadow = true
+		}
+	}
+	if !foundShadow {
+		t.Errorf("subdirectory shadow bind not found in: %v", cfg.Binds)
+	}
+}

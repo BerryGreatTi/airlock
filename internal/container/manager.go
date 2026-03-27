@@ -13,6 +13,7 @@ type RunOpts struct {
 	ProxyImage       string
 	NetworkName      string
 	EnvFilePath      string
+	EnvShadowPath    string   // container path to shadow plaintext env file (e.g., "/workspace/.env")
 	MappingPath      string
 	ClaudeDir        string
 	CACertPath       string
@@ -98,6 +99,9 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 	}
 	if opts.EnvFilePath != "" {
 		binds = append(binds, fmt.Sprintf("%s:/run/airlock/env.enc:ro", opts.EnvFilePath))
+	}
+	if opts.EnvShadowPath != "" {
+		binds = append(binds, fmt.Sprintf("%s:%s:ro", opts.EnvFilePath, opts.EnvShadowPath))
 	}
 	if opts.CACertPath != "" {
 		binds = append(binds, fmt.Sprintf("%s:/usr/local/share/ca-certificates/airlock-proxy.crt:ro", opts.CACertPath))

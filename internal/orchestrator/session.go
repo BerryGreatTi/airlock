@@ -16,8 +16,9 @@ type SessionParams struct {
 	ClaudeDir   string
 	Config      config.Config
 	TmpDir      string
-	EnvFilePath string
-	MappingPath string
+	EnvFilePath   string
+	EnvShadowPath string
+	MappingPath   string
 }
 
 const (
@@ -44,6 +45,7 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 		ProxyImage:       cfg.ProxyImage,
 		NetworkName:      cfg.NetworkName,
 		EnvFilePath:      params.EnvFilePath,
+		EnvShadowPath:    params.EnvShadowPath,
 		MappingPath:      params.MappingPath,
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
@@ -110,6 +112,7 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 		ProxyImage:       cfg.ProxyImage,
 		NetworkName:      networkName,
 		EnvFilePath:      params.EnvFilePath,
+		EnvShadowPath:    params.EnvShadowPath,
 		MappingPath:      params.MappingPath,
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,

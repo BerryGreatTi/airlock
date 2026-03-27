@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -76,6 +77,13 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 			return nil, fmt.Errorf("save mapping: %w", mappingErr)
 		}
 		params.MappingPath = mappingPath
+		absEnvFile, absErr := filepath.Abs(envFile)
+		if absErr == nil {
+			rel, relErr := filepath.Rel(workspace, absEnvFile)
+			if relErr == nil && !strings.HasPrefix(rel, "..") {
+				params.EnvShadowPath = "/workspace/" + filepath.ToSlash(rel)
+			}
+		}
 	}
 
 	if err := orchestrator.StartDetachedSession(ctx, runtime, params); err != nil {

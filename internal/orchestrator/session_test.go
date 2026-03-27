@@ -656,6 +656,80 @@ func TestStartDetachedSessionWithEnvFile(t *testing.T) {
 	}
 }
 
+func TestStartSessionShadowBindPropagated(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, "env.enc")
+	os.WriteFile(envPath, []byte("KEY='ENC[age:xxx]'\n"), 0644)
+	mappingPath := filepath.Join(tmpDir, "mapping.json")
+	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
+
+	params := orchestrator.SessionParams{
+		Workspace:     "/tmp/test-workspace",
+		ClaudeDir:     tmpDir,
+		Config:        cfg,
+		TmpDir:        tmpDir,
+		EnvFilePath:   envPath,
+		EnvShadowPath: "/workspace/.env",
+		MappingPath:   mappingPath,
+	}
+	err := orchestrator.StartSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+	if mock.AttachedConfig == nil {
+		t.Fatal("claude container not started")
+	}
+	hasShadow := false
+	for _, bind := range mock.AttachedConfig.Binds {
+		if strings.Contains(bind, "/workspace/.env") && strings.Contains(bind, ":ro") {
+			hasShadow = true
+		}
+	}
+	if !hasShadow {
+		t.Errorf("shadow bind not propagated to claude config: %v", mock.AttachedConfig.Binds)
+	}
+}
+
+func TestStartDetachedSessionShadowBindPropagated(t *testing.T) {
+	mock := NewMockRuntime()
+	cfg := config.Default()
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, "env.enc")
+	os.WriteFile(envPath, []byte("KEY='ENC[age:xxx]'\n"), 0644)
+	mappingPath := filepath.Join(tmpDir, "mapping.json")
+	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
+
+	params := orchestrator.SessionParams{
+		ID:            "shadow-test",
+		Workspace:     "/tmp/test-workspace",
+		ClaudeDir:     tmpDir,
+		Config:        cfg,
+		TmpDir:        tmpDir,
+		EnvFilePath:   envPath,
+		EnvShadowPath: "/workspace/.env",
+		MappingPath:   mappingPath,
+	}
+	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
+	if err != nil {
+		t.Fatalf("StartDetachedSession failed: %v", err)
+	}
+	if len(mock.DetachedConfigs) < 2 {
+		t.Fatalf("expected 2 detached configs, got %d", len(mock.DetachedConfigs))
+	}
+	claudeCfg := mock.DetachedConfigs[1]
+	hasShadow := false
+	for _, bind := range claudeCfg.Binds {
+		if strings.Contains(bind, "/workspace/.env") && strings.Contains(bind, ":ro") {
+			hasShadow = true
+		}
+	}
+	if !hasShadow {
+		t.Errorf("shadow bind not propagated to detached claude: %v", claudeCfg.Binds)
+	}
+}
+
 func TestStartSessionCACertMountedInClaude(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
