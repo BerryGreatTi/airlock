@@ -21,6 +21,8 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 4. **Docs-first updates**: Update `docs/` before changing implementation. This prevents drift between what's documented and what's built.
 5. **Glossary authority**: Glossary definitions are authoritative. If code behavior diverges from a glossary definition, the code needs to change.
 6. **Decision records**: Every design or architectural decision must be recorded as an ADR in `docs/decisions/` using the format `ADR-NNNN-<slug>.md`. Check existing ADRs before making decisions that might conflict.
+7. **Operational findings**: Compatibility discoveries, runtime environment issues, and deployment gotchas belong in `docs/guides/troubleshooting.md` as operational knowledge. Do not create standalone findings files -- integrate into the existing troubleshooting guide.
+8. **Issue tracking**: Bugs and feature requests discovered during testing or development go to GitHub Issues, not `docs/`. Reference issue numbers from ADR revisions when relevant.
 
 ## ADR Index
 

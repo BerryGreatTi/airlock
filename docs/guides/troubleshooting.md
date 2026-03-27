@@ -9,10 +9,15 @@ System Settings > Privacy & Security > scroll to "AirlockApp was blocked" > Open
 
 ### Workspace activation fails
 
-1. Ensure Docker Desktop is running
+1. Ensure Docker Desktop (or Rancher Desktop / Colima) is running
 2. Ensure container images are built (`make docker-build`)
-3. Check the airlock binary is accessible (Settings > Airlock binary path)
+3. Check the airlock binary is in `PATH` (or configure in Settings > Airlock binary path)
 4. If containers from a previous crash remain, the app will offer cleanup on launch
+5. If using Rancher Desktop or Colima, check that the Docker socket is detected (see Docker Issues below)
+
+### App doesn't receive keyboard focus (CLI launch)
+
+When launching via `swift run` or the built binary from a terminal, the app may not capture keyboard focus. Clicking the app window should activate it. This is resolved in builds after 2026-03-27 via `NSApp.setActivationPolicy(.regular)`.
 
 ### "Not a git repository" in diff viewer
 
@@ -39,8 +44,24 @@ The workspace must be in "Running" (green dot) state. If activation failed silen
 docker init: create docker client: ...
 ```
 
-Docker is not running. Start it:
-- macOS: Open Docker Desktop
+Docker is not running, or the Docker socket is not at the expected path. Check:
+
+**Docker is running but airlock can't find it (Rancher Desktop, Colima, etc.):**
+
+The Go Docker SDK reads the `DOCKER_HOST` environment variable but does not read Docker CLI contexts. If you use a non-default Docker runtime, set `DOCKER_HOST`:
+
+```bash
+# Rancher Desktop
+export DOCKER_HOST=unix://$HOME/.rd/docker.sock
+
+# Colima
+export DOCKER_HOST=unix://$HOME/.colima/docker.sock
+```
+
+The GUI app auto-detects common socket paths. If your socket is in a non-standard location, set `DOCKER_HOST` before launching the app.
+
+**Docker is genuinely not running:**
+- macOS: Open Docker Desktop (or Rancher Desktop, Colima, etc.)
 - Linux: `sudo systemctl start docker`
 
 ### "image not found: airlock-claude:latest"

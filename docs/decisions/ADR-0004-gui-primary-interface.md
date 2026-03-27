@@ -116,3 +116,45 @@ The following spec features are not yet implemented and are tracked for future w
 - Secrets tab: Export button, per-row View/Edit actions, Key Info section (public key, creation date)
 - Pre-checks: Container image existence check (`airlock-claude:latest`, `airlock-proxy:latest`)
 - Terminal split: Cmd+D/Shift+D adds a pane and sets direction (implemented), but no 2x2 grid layout for 4 panes
+
+## Revision (2026-03-27): macOS E2E test -- 18/20 PASS
+
+First manual E2E test on macOS 26.2 / Xcode 26.4 / Swift 6.2.3. Unit tests: 26/26 PASS. E2E: 18/20 PASS after fixing 9 bugs in-session.
+
+### Bugs fixed during E2E
+
+| Fix | Files | Root cause |
+|-----|-------|------------|
+| Docker path hardcoded to `/usr/local/bin/docker` | ContainerSessionService, ContainerStatusView | Rancher Desktop/Colima use `~/.rd/bin/docker` etc. Fixed via `CLIService.findInPath("docker")` |
+| `DOCKER_HOST` not set for Go Docker SDK | CLIService | Go SDK uses `client.FromEnv` which reads `DOCKER_HOST`, not Docker contexts. Added auto-detection of common socket paths |
+| App doesn't receive keyboard focus when CLI-launched | AirlockApp | `swift run` subprocess doesn't set activation policy. Fixed with `setActivationPolicy(.regular)` + `activate(ignoringOtherApps:)` |
+| TextField disabled in NewWorkspaceSheet | NewWorkspaceSheet | Users couldn't type paths directly. Removed `.disabled(true)` |
+| Pre-check secrets not showing | NewWorkspaceSheet | Race condition: secrets check ran after async Docker await, concurrent calls reset the `checks` array. Moved secrets check before await |
+| Terminal resets on tab switch | ContentView | `switch` statement destroyed/recreated views. Changed to opacity-based persistence for terminal tab |
+| Terminal resets on pane add | TerminalSplitView | Single-pane used direct view, multi-pane used `VSplitView` -- different view identity. Unified to always use split view |
+| VSplitView/HSplitView swapped | TerminalSplitView | "Vertical split" should create a vertical divider (side-by-side), which is `HSplitView` in SwiftUI |
+| Encrypt All silent failure | SecretsView | Missing envfile arg and `-o` flag. Also, `airlock encrypt` outputs single-quoted values that the parser didn't strip |
+| Swift 6 concurrency error in tests | AppStateTests | `@MainActor` on `AppState` required test class to also be `@MainActor` |
+
+### Docker runtime compatibility
+
+The GUI now supports non-default Docker installations via auto-detection:
+
+| Runtime | Socket path | Status |
+|---------|-------------|--------|
+| Docker Desktop | `/var/run/docker.sock` | Supported |
+| Rancher Desktop | `~/.rd/docker.sock` | Supported (tested) |
+| Colima | `~/.colima/docker.sock` | Supported (untested) |
+| Docker Desktop (newer) | `~/.docker/run/docker.sock` | Supported (untested) |
+
+### Known issues (tracked as GitHub issues)
+
+| Issue | Severity | GitHub |
+|-------|----------|--------|
+| Terminal rendering unstable on initial load | Minor | #2 |
+| Korean/CJK input not supported in container | Minor | #3 |
+| Terminal pane ratio not configurable | Minor | #4 |
+| Split direction change destroys terminals | Medium | #5 |
+| Rapid tab switching causes UI flicker | Minor | #6 |
+| Tab bar shifts after deactivate | Minor | #7 |
+| mitmproxy CA cert not auto-trusted in agent container | Medium | infra scope |
