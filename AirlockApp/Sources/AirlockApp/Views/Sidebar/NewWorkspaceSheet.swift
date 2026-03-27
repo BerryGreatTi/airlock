@@ -26,14 +26,12 @@ struct NewWorkspaceSheet: View {
             HStack {
                 TextField("Project directory", text: $selectedPath)
                     .textFieldStyle(.roundedBorder)
-                    .disabled(true)
                 Button("Browse...") { pickDirectory() }
             }
 
             HStack {
                 TextField(".env file (optional)", text: $envFilePath)
                     .textFieldStyle(.roundedBorder)
-                    .disabled(true)
                 Button("Browse...") { pickEnvFile() }
                 if !envFilePath.isEmpty {
                     Button { envFilePath = "" } label: {
@@ -125,20 +123,6 @@ struct NewWorkspaceSheet: View {
             detail: initialized ? nil : "will run airlock init"
         ))
 
-        // Show synchronous checks immediately, Docker check updates async
-        results.append(PreCheck(
-            id: "docker",
-            label: "Docker running",
-            passed: nil
-        ))
-        checks = results
-
-        let dockerOK = await containerService.isDockerRunning()
-        if let idx = checks.firstIndex(where: { $0.id == "docker" }) {
-            checks[idx].passed = dockerOK
-            checks[idx].detail = dockerOK ? nil : "start Docker Desktop"
-        }
-
         if !envFilePath.isEmpty {
             let envContent = (try? String(contentsOfFile: envFilePath, encoding: .utf8)) ?? ""
             let sensitivePatterns = ["KEY", "SECRET", "PASSWORD", "TOKEN"]
@@ -152,13 +136,27 @@ struct NewWorkspaceSheet: View {
                     return sensitivePatterns.contains(where: { key.contains($0) }) && !value.hasPrefix("ENC[age:")
                 }
             if hasPlaintext {
-                checks.append(PreCheck(
+                results.append(PreCheck(
                     id: "secrets",
                     label: "Plaintext secrets detected",
                     passed: false,
                     detail: "will be encrypted on activation"
                 ))
             }
+        }
+
+        // Show synchronous checks immediately, Docker check updates async
+        results.append(PreCheck(
+            id: "docker",
+            label: "Docker running",
+            passed: nil
+        ))
+        checks = results
+
+        let dockerOK = await containerService.isDockerRunning()
+        if let idx = checks.firstIndex(where: { $0.id == "docker" }) {
+            checks[idx].passed = dockerOK
+            checks[idx].detail = dockerOK ? nil : "start Docker Desktop"
         }
     }
 

@@ -198,9 +198,11 @@ struct ContainerStatusView: View {
     @State private var logPipe: Pipe?
 
     private func startLogStream() {
+        guard let dockerPath = CLIService.findInPath("docker") else { return }
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/local/bin/docker")
+        process.executableURL = URL(fileURLWithPath: dockerPath)
         process.arguments = ["logs", "--follow", "--tail", "100", workspace.proxyName]
+        process.environment = CLIService.enrichedEnvironment()
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice

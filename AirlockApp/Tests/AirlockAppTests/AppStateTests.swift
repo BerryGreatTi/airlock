@@ -1,6 +1,7 @@
 import XCTest
 @testable import AirlockApp
 
+@MainActor
 final class AppStateTests: XCTestCase {
     func testSelectedWorkspace() {
         let state = AppState()

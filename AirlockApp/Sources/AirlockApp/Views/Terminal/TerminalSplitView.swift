@@ -61,16 +61,14 @@ struct TerminalSplitView: View {
 
     @ViewBuilder
     private var terminalGrid: some View {
-        if panes.count == 1, let pane = panes.first {
-            singleTerminal(pane: pane)
-        } else if splitVertical {
-            VSplitView {
+        if splitVertical {
+            HSplitView {
                 ForEach(panes) { pane in
                     singleTerminal(pane: pane)
                 }
             }
         } else {
-            HSplitView {
+            VSplitView {
                 ForEach(panes) { pane in
                     singleTerminal(pane: pane)
                 }

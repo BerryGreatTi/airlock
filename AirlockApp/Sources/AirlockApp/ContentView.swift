@@ -65,8 +65,8 @@ struct ContentView: View {
     @ViewBuilder
     private func tabContent(workspace: Workspace) -> some View {
         ZStack {
-            switch appState.selectedTab {
-            case .terminal:
+            // Terminal stays alive across tab switches
+            Group {
                 if appState.isActive(workspace) {
                     TerminalSplitView(containerName: workspace.containerName, action: $terminalAction)
                 } else {
@@ -76,13 +76,20 @@ struct ContentView: View {
                         Text("Activate this workspace from the sidebar to open a terminal")
                     }
                 }
-            case .secrets:
+            }
+            .opacity(appState.selectedTab == .terminal ? 1 : 0)
+            .allowsHitTesting(appState.selectedTab == .terminal)
+
+            if appState.selectedTab == .secrets {
                 SecretsView(workspace: workspace, appState: appState)
-            case .containers:
+            }
+            if appState.selectedTab == .containers {
                 ContainerStatusView(workspace: workspace, appState: appState)
-            case .diff:
+            }
+            if appState.selectedTab == .diff {
                 DiffContainerView(workspace: workspace, appState: appState)
-            case .settings:
+            }
+            if appState.selectedTab == .settings {
                 SettingsView(appState: appState)
             }
 

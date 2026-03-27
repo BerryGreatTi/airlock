@@ -24,6 +24,7 @@ final class CLIService {
         process.executableURL = URL(filePath: resolveAirlockBinary())
         process.arguments = args
         process.currentDirectoryURL = URL(filePath: workingDirectory)
+        process.environment = Self.enrichedEnvironment()
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
@@ -79,6 +80,18 @@ final class CLIService {
         let missing = extraPaths.filter { !currentPath.contains($0) }
         if !missing.isEmpty {
             env["PATH"] = (missing + [currentPath]).joined(separator: ":")
+        }
+        if env["DOCKER_HOST"] == nil {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            let candidates = [
+                "/var/run/docker.sock",
+                "\(home)/.rd/docker.sock",
+                "\(home)/.colima/docker.sock",
+                "\(home)/.docker/run/docker.sock",
+            ]
+            if let sock = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+                env["DOCKER_HOST"] = "unix://\(sock)"
+            }
         }
         return env
     }

@@ -45,6 +45,10 @@ struct AirlockApp: App {
         WindowGroup {
             ContentView()
                 .frame(minWidth: 800, minHeight: 500)
+                .onAppear {
+                    NSApp.setActivationPolicy(.regular)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
         }
         .defaultSize(width: 1200, height: 700)
         .commands {

@@ -201,9 +201,13 @@ struct SecretsView: View {
                 guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return nil }
                 let parts = trimmed.split(separator: "=", maxSplits: 1)
                 guard parts.count == 2 else { return nil }
+                let rawValue = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                let value = rawValue.hasPrefix("'") && rawValue.hasSuffix("'") && rawValue.count >= 2
+                    ? String(rawValue.dropFirst().dropLast())
+                    : rawValue
                 return EnvEntry(
                     key: String(parts[0]).trimmingCharacters(in: .whitespaces),
-                    value: String(parts[1]).trimmingCharacters(in: .whitespaces)
+                    value: value
                 )
             }
         } catch {
@@ -212,12 +216,17 @@ struct SecretsView: View {
     }
 
     private func encryptAll() {
+        guard let envFile = workspace.envFilePath else { return }
         Task {
             let cli = CLIService()
-            _ = try? await cli.run(args: ["encrypt"], workingDirectory: workspace.path)
-            if let envFile = workspace.envFilePath {
-                loadEnvFile(envFile)
+            let result = try? await cli.run(
+                args: ["encrypt", envFile, "-o", envFile],
+                workingDirectory: workspace.path
+            )
+            if let result, result.exitCode != 0 {
+                errorMessage = result.stderr.isEmpty ? "Encryption failed" : result.stderr
             }
+            loadEnvFile(envFile)
         }
     }
 

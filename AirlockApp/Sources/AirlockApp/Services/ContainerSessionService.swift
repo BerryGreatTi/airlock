@@ -50,9 +50,10 @@ final class ContainerSessionService {
     }
 
     func isDockerRunning() async -> Bool {
-        await withCheckedContinuation { continuation in
+        guard let dockerPath = CLIService.findInPath("docker") else { return false }
+        return await withCheckedContinuation { continuation in
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/local/bin/docker")
+            process.executableURL = URL(fileURLWithPath: dockerPath)
             process.arguments = ["info"]
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
