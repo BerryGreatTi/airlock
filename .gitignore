@@ -19,3 +19,4 @@ AirlockApp/.swiftpm/
 
 # Local setting files
 .claude/settings.local.json
+.claude/worktrees/
