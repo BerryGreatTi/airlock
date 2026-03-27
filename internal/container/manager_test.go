@@ -421,6 +421,22 @@ func TestBuildClaudeDetachedConfigPreservesEnv(t *testing.T) {
 	}
 }
 
+func TestBuildProxyConfigNoMappingPath(t *testing.T) {
+	opts := container.RunOpts{
+		ProxyImage:       "airlock-proxy:latest",
+		NetworkName:      "airlock-net",
+		MappingPath:      "",
+		ProxyPort:        8080,
+		PassthroughHosts: []string{"api.anthropic.com"},
+	}
+	cfg := container.BuildProxyConfig(opts)
+
+	// With empty MappingPath, there should be no bind mounts
+	if len(cfg.Binds) != 0 {
+		t.Errorf("expected 0 bind mounts when MappingPath is empty, got %d: %v", len(cfg.Binds), cfg.Binds)
+	}
+}
+
 func TestBuildProxyConfigMappingEnv(t *testing.T) {
 	opts := container.RunOpts{
 		ProxyImage:       "airlock-proxy:latest",

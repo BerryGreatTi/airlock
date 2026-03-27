@@ -30,7 +30,14 @@ func ParseEnvFile(path string) ([]EnvEntry, error) {
 		if idx < 0 {
 			continue
 		}
-		entries = append(entries, EnvEntry{Key: line[:idx], Value: line[idx+1:]})
+		value := line[idx+1:]
+		if len(value) >= 2 {
+			if (value[0] == '"' && value[len(value)-1] == '"') ||
+				(value[0] == '\'' && value[len(value)-1] == '\'') {
+				value = value[1 : len(value)-1]
+			}
+		}
+		entries = append(entries, EnvEntry{Key: line[:idx], Value: value})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scan env file: %w", err)

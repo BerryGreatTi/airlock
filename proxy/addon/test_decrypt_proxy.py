@@ -251,6 +251,53 @@ def test_replace_secrets_preserves_surrounding_text():
     assert result == "prefix-val-suffix and more text"
 
 
+# --- Hot-reload tests ---
+
+
+def test_mapping_hot_reload():
+    """Verify mapping is reloaded when the file changes on disk."""
+    from decrypt_proxy import DecryptAddon
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    json.dump({"ENC[age:v1]": "secret_v1"}, f)
+    f.flush()
+    f.close()
+
+    addon = DecryptAddon(f.name, passthrough_hosts=[])
+    assert addon.replace_secrets("ENC[age:v1]") == "secret_v1"
+
+    # Update the mapping file with new content
+    import time
+    time.sleep(0.05)  # ensure mtime changes
+    with open(f.name, "w") as fh:
+        json.dump({"ENC[age:v2]": "secret_v2"}, fh)
+
+    # Trigger reload via request
+    flow = _make_flow(host="api.example.com", headers={"Auth": "ENC[age:v2]"})
+    addon.request(flow)
+    assert flow.request.headers["Auth"] == "secret_v2"
+
+    os.unlink(f.name)
+
+
+def test_mapping_hot_reload_no_change():
+    """Verify no unnecessary reload when file hasn't changed."""
+    from decrypt_proxy import DecryptAddon
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    json.dump({"ENC[age:tok]": "val"}, f)
+    f.flush()
+    f.close()
+
+    addon = DecryptAddon(f.name, passthrough_hosts=[])
+    original_mtime = addon._last_mtime
+
+    # Request without file change should not reload
+    flow = _make_flow(host="api.example.com", headers={"X": "plain"})
+    addon.request(flow)
+    assert addon._last_mtime == original_mtime
+
+    os.unlink(f.name)
+
+
 # --- Structured JSON logging tests ---
 
 

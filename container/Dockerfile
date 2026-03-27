@@ -18,6 +18,9 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 COPY entrypoint-keepalive.sh /usr/local/bin/entrypoint-keepalive.sh
 RUN chmod +x /usr/local/bin/entrypoint-keepalive.sh
 
+COPY airlock-exec.sh /usr/local/bin/airlock-exec.sh
+RUN chmod +x /usr/local/bin/airlock-exec.sh
+
 USER airlock
 WORKDIR /workspace
 

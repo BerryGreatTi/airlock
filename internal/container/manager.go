@@ -52,11 +52,17 @@ func BuildProxyConfig(opts RunOpts) ContainerConfig {
 		name = "airlock-proxy-" + opts.ID
 	}
 	passthroughStr := strings.Join(opts.PassthroughHosts, ",")
+
+	var binds []string
+	if opts.MappingPath != "" {
+		binds = append(binds, fmt.Sprintf("%s:/run/airlock/mapping.json:ro", opts.MappingPath))
+	}
+
 	return ContainerConfig{
 		Image:   opts.ProxyImage,
 		Name:    name,
 		Network: opts.NetworkName,
-		Binds:   []string{fmt.Sprintf("%s:/run/airlock/mapping.json:ro", opts.MappingPath)},
+		Binds:   binds,
 		Env: []string{
 			"AIRLOCK_MAPPING_PATH=/run/airlock/mapping.json",
 			fmt.Sprintf("AIRLOCK_PASSTHROUGH_HOSTS=%s", passthroughStr),

@@ -25,6 +25,8 @@ class DecryptAddon:
     ):
         self.mapping: dict[str, str] = {}
         self.passthrough: set[str] = set()
+        self._mapping_path: str = mapping_path
+        self._last_mtime: float = 0.0
 
         if passthrough_hosts is not None:
             self.passthrough = set(passthrough_hosts)
@@ -39,6 +41,7 @@ class DecryptAddon:
 
     def _load_mapping(self, path: str) -> None:
         try:
+            self._last_mtime = os.path.getmtime(path)
             with open(path) as f:
                 self.mapping = json.load(f)
             logging.info("Loaded %d secret mappings", len(self.mapping))
@@ -46,6 +49,14 @@ class DecryptAddon:
             logging.warning("Mapping file not found: %s", path)
         except json.JSONDecodeError as e:
             logging.error("Invalid mapping JSON: %s", e)
+
+    def _maybe_reload_mapping(self) -> None:
+        try:
+            mtime = os.path.getmtime(self._mapping_path)
+            if mtime != self._last_mtime:
+                self._load_mapping(self._mapping_path)
+        except OSError:
+            pass
 
     def is_passthrough(self, host: str) -> bool:
         return host in self.passthrough
@@ -77,6 +88,8 @@ class DecryptAddon:
         if self.is_passthrough(host):
             self._emit_log(host, "passthrough")
             return
+
+        self._maybe_reload_mapping()
 
         decrypted = False
 

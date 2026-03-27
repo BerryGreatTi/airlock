@@ -53,3 +53,32 @@ func TestParseEnvFileNotExist(t *testing.T) {
 		t.Error("expected error for nonexistent file")
 	}
 }
+
+func TestParseEnvFileStripsQuotes(t *testing.T) {
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+	content := "DOUBLE=\"double_val\"\nSINGLE='single_val'\nNONE=plain_val\nEMPTY=\"\"\nSHORT=x\n"
+	os.WriteFile(envPath, []byte(content), 0644)
+
+	entries, err := secrets.ParseEnvFile(envPath)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if len(entries) != 5 {
+		t.Fatalf("expected 5 entries, got %d", len(entries))
+	}
+	tests := []struct {
+		key, want string
+	}{
+		{"DOUBLE", "double_val"},
+		{"SINGLE", "single_val"},
+		{"NONE", "plain_val"},
+		{"EMPTY", ""},
+		{"SHORT", "x"},
+	}
+	for i, tt := range tests {
+		if entries[i].Key != tt.key || entries[i].Value != tt.want {
+			t.Errorf("entry %d: got {%s, %s}, want {%s, %s}", i, entries[i].Key, entries[i].Value, tt.key, tt.want)
+		}
+	}
+}
