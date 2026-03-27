@@ -437,6 +437,27 @@ func TestBuildProxyConfigNoMappingPath(t *testing.T) {
 	}
 }
 
+func TestBuildClaudeConfigLocaleEnv(t *testing.T) {
+	opts := container.RunOpts{
+		Workspace:   "/tmp/ws",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   8080,
+	}
+	cfg := container.BuildClaudeConfig(opts)
+	found := false
+	for _, env := range cfg.Env {
+		if env == "LANG=C.UTF-8" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected LANG=C.UTF-8 in Env, got: %v", cfg.Env)
+	}
+}
+
 func TestBuildProxyConfigMappingEnv(t *testing.T) {
 	opts := container.RunOpts{
 		ProxyImage:       "airlock-proxy:latest",

@@ -117,6 +117,7 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 			fmt.Sprintf("http_proxy=%s", proxyURL),
 			fmt.Sprintf("https_proxy=%s", proxyURL),
 			"NO_PROXY=localhost,127.0.0.1",
+			"LANG=C.UTF-8",
 		},
 		CapDrop: []string{"ALL"},
 		Cmd:     []string{"claude", "--dangerouslySkipPermissions"},

@@ -23,6 +23,8 @@ fi
 # Write environment setup to .bashrc so docker exec sessions inherit env vars.
 # PID 1 env is NOT inherited by docker exec, so this is required.
 cat > /home/airlock/.airlock-env.sh << 'ENVEOF'
+export LANG=C.UTF-8
+
 if [ -f /run/airlock/env.enc ]; then
     set -a
     source /run/airlock/env.enc
