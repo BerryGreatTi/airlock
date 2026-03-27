@@ -101,7 +101,7 @@ struct SidebarView: View {
         appState.selectedWorkspaceID = workspace.id
         appState.selectedTab = .terminal
         appState.lastError = nil
-        Task {
+        Task { @MainActor in
             do {
                 _ = try await containerService.activate(workspace: workspace)
                 appState.activeWorkspaceIDs.insert(workspace.id)
@@ -115,7 +115,7 @@ struct SidebarView: View {
     }
 
     private func deactivateWorkspace(_ workspace: Workspace) {
-        Task {
+        Task { @MainActor in
             await containerService.deactivate(workspace: workspace)
             appState.activeWorkspaceIDs.remove(workspace.id)
             if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
@@ -124,6 +124,7 @@ struct SidebarView: View {
         }
     }
 
+    @MainActor
     private func removeWorkspace(_ workspace: Workspace) {
         appState.workspaces.removeAll { $0.id == workspace.id }
         appState.activeWorkspaceIDs.remove(workspace.id)

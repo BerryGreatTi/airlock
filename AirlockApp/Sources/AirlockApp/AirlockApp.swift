@@ -63,7 +63,7 @@ struct AirlockApp: App {
                 Button("Activate") {
                     guard let state = appState, let ws = state.selectedWorkspace,
                           let service = containerService else { return }
-                    Task {
+                    Task { @MainActor in
                         do {
                             _ = try await service.activate(workspace: ws)
                             state.activeWorkspaceIDs.insert(ws.id)
@@ -80,7 +80,7 @@ struct AirlockApp: App {
                 Button("Deactivate") {
                     guard let state = appState, let ws = state.selectedWorkspace,
                           let service = containerService else { return }
-                    Task {
+                    Task { @MainActor in
                         await service.deactivate(workspace: ws)
                         state.activeWorkspaceIDs.remove(ws.id)
                         if let idx = state.workspaces.firstIndex(where: { $0.id == ws.id }) {

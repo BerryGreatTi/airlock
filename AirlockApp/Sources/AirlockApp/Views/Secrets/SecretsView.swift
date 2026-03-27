@@ -217,7 +217,7 @@ struct SecretsView: View {
 
     private func encryptAll() {
         guard let envFile = workspace.envFilePath else { return }
-        Task {
+        Task { @MainActor in
             let cli = CLIService()
             let result = try? await cli.run(
                 args: ["encrypt", envFile, "-o", envFile],

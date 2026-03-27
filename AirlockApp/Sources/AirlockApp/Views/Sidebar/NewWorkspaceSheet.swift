@@ -185,7 +185,7 @@ struct NewWorkspaceSheet: View {
         let cli = CLIService()
         let path = selectedPath
 
-        Task {
+        Task { @MainActor in
             if !cli.isAirlockInitialized(path: path) {
                 statusMessage = "Running airlock init..."
                 let result = try await cli.run(args: ["init"], workingDirectory: path)
