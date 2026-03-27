@@ -110,3 +110,12 @@ docker images | grep airlock
 # Check Docker is running
 docker info > /dev/null 2>&1 && echo "Docker OK" || echo "Docker not running"
 ```
+
+## Run tests
+
+```bash
+make test          # Go unit tests (race detector + coverage)
+make test-python   # Proxy addon unit tests (pytest)
+make test-e2e      # Proxy decryption E2E test (requires Docker + built images)
+make test-all      # Go + Python unit tests
+```

@@ -157,4 +157,40 @@ The GUI now supports non-default Docker installations via auto-detection:
 | Split direction change destroys terminals | Medium | #5 |
 | Rapid tab switching causes UI flicker | Minor | #6 |
 | Tab bar shifts after deactivate | Minor | #7 |
-| mitmproxy CA cert not auto-trusted in agent container | Medium | infra scope |
+| mitmproxy CA cert not auto-trusted in agent container | ~~Medium~~ Resolved | Fixed in revision below |
+| Activate from Terminal tab causes transient error | Minor | #10 |
+
+## Revision (2026-03-27): Proxy E2E verification -- 9/9 automated, 10/10 GUI manual
+
+End-to-end verification of the secret encryption/decryption proxy pipeline. Resolved 6 blocking issues, added automated E2E test suite (`make test-e2e`), and validated the full flow through the GUI.
+
+### Issues resolved
+
+| Fix | Files | Root cause |
+|-----|-------|------------|
+| Empty MappingPath causes invalid Docker bind mount | `manager.go` | Proxy config always created a mapping bind mount, even when no env file was provided. Now conditional. |
+| CA cert not system-trusted in agent container | `entrypoint.sh`, `entrypoint-keepalive.sh` | `update-ca-certificates` failed silently (non-root). Replaced with combined CA bundle (`system + proxy cert`) exported via `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`. |
+| Entrypoint inconsistency between attached/detached | `entrypoint.sh`, `entrypoint-keepalive.sh` | Attached mode skipped `update-ca-certificates`; detached mode called it but failed. Both now use identical combined bundle approach. |
+| `docker exec` doesn't inherit PID 1 env vars | `entrypoint-keepalive.sh`, `airlock-exec.sh` | Docker exec starts a fresh process. Added `.airlock-env.sh` sourced via `.bashrc` for interactive shells, plus `airlock-exec.sh` wrapper for non-interactive exec. |
+| Mapping not hot-reloaded | `decrypt_proxy.py` | Proxy loaded mapping once at startup. Now checks file mtime on each request and reloads if changed. |
+| Double encryption when "Encrypt All" then "Activate" | `mapping.go`, CLI callers | `EncryptEntries` re-encrypted already-encrypted values. Now detects `ENC[age:...]` values, skips re-encryption, and builds the mapping by decrypting the existing ciphertext. |
+| `.env` quote stripping (Go + Swift) | `envfile.go`, `SecretsView.swift` | `KEY="value"` was encrypted with quotes intact. Both Go `ParseEnvFile` and Swift `loadEnvFile` now strip surrounding single/double quotes. |
+
+### Architectural decisions
+
+1. **Combined CA bundle over system trust store.** Non-root containers cannot write to `/etc/ssl/certs/`. Instead, the entrypoint concatenates the system CA bundle with the proxy cert into `/tmp/airlock-ca-bundle.crt` and exports `SSL_CERT_FILE`/`CURL_CA_BUNDLE`/`REQUESTS_CA_BUNDLE`. Node.js uses `NODE_EXTRA_CA_CERTS` which only needs the extra cert. This works for curl, python, node, and most TLS-aware tools without requiring root.
+
+2. **`.bashrc` + wrapper script for docker exec env.** Docker container-level env vars (set via API `Env` field) are inherited by exec sessions, but entrypoint-exported vars (like `SSL_CERT_FILE`) are not. Solution: entrypoint writes `.airlock-env.sh` and appends a source line to `.bashrc`. Interactive shells (GUI terminal) pick up env via `.bashrc`. Non-interactive exec uses `airlock-exec.sh` wrapper.
+
+3. **Idempotent encryption with private key.** `EncryptEntries` now accepts both public and private keys. When it encounters an already-encrypted value, it decrypts with the private key to build the proxy mapping, rather than re-encrypting. This makes the "Encrypt All" → "Activate" GUI flow and repeated `airlock start --env` invocations safe.
+
+### E2E test infrastructure
+
+Added `test/e2e-proxy.sh` (9 tests) runnable via `make test-e2e`. Requires Docker and built images. Tests:
+- Env vars contain ENC tokens (not plaintext) inside container
+- CA bundle and SSL_CERT_FILE correctly configured
+- Header decryption verified via httpbin.org
+- Body decryption verified via httpbin.org POST
+- Single/double quoted .env values stripped and decrypted
+- Anthropic API passthrough (no decryption)
+- Proxy structured JSON logging

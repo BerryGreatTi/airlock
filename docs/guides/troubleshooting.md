@@ -83,6 +83,19 @@ docker network rm airlock-net
 
 ## Encryption Issues
 
+### Quoted values in .env files
+
+Airlock strips surrounding quotes from `.env` values before encryption:
+
+```
+# All three produce the same encrypted value for "my_secret":
+KEY=my_secret
+KEY="my_secret"
+KEY='my_secret'
+```
+
+If you see quotes appearing in decrypted API responses, ensure both the Go CLI (`bin/airlock`) and GUI app are up to date.
+
 ### "load keypair: read private key: no such file or directory"
 
 `.airlock/` is not initialized. Run `airlock init` first.
@@ -99,10 +112,11 @@ airlock encrypt .env  # Use the correct path
 
 ### API calls fail with certificate errors
 
-The proxy's CA certificate may not be trusted inside the container. This is handled automatically, but if it fails:
+The proxy's mitmproxy CA certificate must be trusted inside the agent container. Airlock handles this automatically by building a combined CA bundle (`/tmp/airlock-ca-bundle.crt`) and setting `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, and `NODE_EXTRA_CA_CERTS`. If it still fails:
 1. Check proxy container is running: `docker ps | grep airlock-proxy`
 2. Check CA cert was generated: `docker exec airlock-proxy ls /root/.mitmproxy/`
-3. Restart the session: `airlock stop && airlock run --env .env`
+3. Check bundle exists in agent: `docker exec airlock-claude-{id} ls /tmp/airlock-ca-bundle.crt`
+4. Restart the session: deactivate and reactivate the workspace (GUI), or `airlock stop && airlock run --env .env` (CLI)
 
 ### Requests to Claude API are being intercepted
 
