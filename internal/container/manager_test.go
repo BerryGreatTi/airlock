@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/taeikkim92/airlock/internal/container"
+	"github.com/taeikkim92/airlock/internal/secrets"
 )
 
 func TestContainerOptsValidation(t *testing.T) {
@@ -18,7 +19,7 @@ func TestContainerOptsValidation(t *testing.T) {
 			opts: container.RunOpts{
 				Workspace: "/tmp/workspace", Image: "airlock-claude:latest",
 				ProxyImage: "airlock-proxy:latest", NetworkName: "airlock-net",
-				EnvFilePath: "/tmp/.env.enc", MappingPath: "/tmp/mapping.json",
+				MappingPath: "/tmp/mapping.json",
 				ClaudeDir: "/home/user/.claude", ProxyPort: 8080,
 			},
 			wantErr: false,
@@ -54,7 +55,8 @@ func TestBuildProxyContainerConfig(t *testing.T) {
 func TestBuildClaudeContainerConfig(t *testing.T) {
 	opts := container.RunOpts{
 		Workspace: "/home/user/project", Image: "airlock-claude:latest",
-		NetworkName: "airlock-net", EnvFilePath: "/tmp/.env.enc",
+		NetworkName: "airlock-net",
+		ShadowMounts: []secrets.ShadowMount{{HostPath: "/tmp/.env.enc", ContainerPath: "/run/airlock/env.enc"}},
 		ClaudeDir: "/home/user/.claude", ProxyPort: 8080, CACertPath: "/tmp/ca.pem",
 	}
 	cfg := container.BuildClaudeConfig(opts)
@@ -82,11 +84,11 @@ func TestBuildClaudeConfigWithoutOptionalFields(t *testing.T) {
 		NetworkName: "airlock-net",
 		ClaudeDir:   "/home/user/.claude",
 		ProxyPort:   8080,
-		// EnvFilePath and CACertPath intentionally omitted
+		// ShadowMounts and CACertPath intentionally omitted
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	// Without env file and CA cert, should have exactly 2 bind mounts
+	// Without shadow mounts and CA cert, should have exactly 2 bind mounts
 	if len(cfg.Binds) != 2 {
 		t.Errorf("expected 2 bind mounts without optional fields, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
@@ -94,7 +96,7 @@ func TestBuildClaudeConfigWithoutOptionalFields(t *testing.T) {
 	// Verify no env.enc bind
 	for _, bind := range cfg.Binds {
 		if strings.Contains(bind, "env.enc") {
-			t.Error("should not have env.enc bind when EnvFilePath is empty")
+			t.Error("should not have env.enc bind when ShadowMounts is empty")
 		}
 		if strings.Contains(bind, "ca-certificates") {
 			t.Error("should not have CA cert bind when CACertPath is empty")
@@ -104,17 +106,17 @@ func TestBuildClaudeConfigWithoutOptionalFields(t *testing.T) {
 
 func TestBuildClaudeConfigAllBindMounts(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:   "/home/user/project",
-		Image:       "airlock-claude:latest",
-		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
-		ProxyPort:   8080,
-		EnvFilePath: "/tmp/env.enc",
-		CACertPath:  "/tmp/ca.pem",
+		Workspace:    "/home/user/project",
+		Image:        "airlock-claude:latest",
+		NetworkName:  "airlock-net",
+		ClaudeDir:    "/home/user/.claude",
+		ProxyPort:    8080,
+		ShadowMounts: []secrets.ShadowMount{{HostPath: "/tmp/env.enc", ContainerPath: "/run/airlock/env.enc"}},
+		CACertPath:   "/tmp/ca.pem",
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	// With all optional fields: workspace + .claude + env.enc + ca-cert = 4
+	// With all optional fields: workspace + .claude + ca-cert + 1 shadow mount = 4
 	if len(cfg.Binds) != 4 {
 		t.Errorf("expected 4 bind mounts with all optional fields, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
@@ -382,17 +384,17 @@ func TestBuildClaudeDetachedConfig(t *testing.T) {
 
 func TestBuildClaudeDetachedConfigPreservesBinds(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:   "/home/user/project",
-		Image:       "airlock-claude:latest",
-		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
-		ProxyPort:   8080,
-		EnvFilePath: "/tmp/env.enc",
-		CACertPath:  "/tmp/ca.pem",
+		Workspace:    "/home/user/project",
+		Image:        "airlock-claude:latest",
+		NetworkName:  "airlock-net",
+		ClaudeDir:    "/home/user/.claude",
+		ProxyPort:    8080,
+		ShadowMounts: []secrets.ShadowMount{{HostPath: "/tmp/env.enc", ContainerPath: "/run/airlock/env.enc"}},
+		CACertPath:   "/tmp/ca.pem",
 	}
 	cfg := container.BuildClaudeDetachedConfig(opts)
 
-	// Should have all 4 bind mounts (workspace, .claude, env.enc, ca-cert)
+	// Should have all 4 bind mounts (workspace, .claude, ca-cert, 1 shadow mount)
 	if len(cfg.Binds) != 4 {
 		t.Errorf("expected 4 bind mounts, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
@@ -486,17 +488,19 @@ func TestBuildProxyConfigMappingEnv(t *testing.T) {
 
 func TestBuildClaudeConfigEnvShadowBind(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:     "/home/user/project",
-		Image:         "airlock-claude:latest",
-		NetworkName:   "airlock-net",
-		ClaudeDir:     "/home/user/.claude",
-		ProxyPort:     8080,
-		EnvFilePath:   "/tmp/airlock-xyz/env.enc",
-		EnvShadowPath: "/workspace/.env",
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   8080,
+		ShadowMounts: []secrets.ShadowMount{
+			{HostPath: "/tmp/airlock-xyz/env.enc", ContainerPath: "/run/airlock/env.enc"},
+			{HostPath: "/tmp/airlock-xyz/env.enc", ContainerPath: "/workspace/.env"},
+		},
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	// workspace + .claude + env.enc + shadow = 4
+	// workspace + .claude + 2 shadow mounts = 4
 	if len(cfg.Binds) != 4 {
 		t.Errorf("expected 4 binds with shadow, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
@@ -516,17 +520,17 @@ func TestBuildClaudeConfigEnvShadowBind(t *testing.T) {
 
 func TestBuildClaudeConfigNoShadowWhenEmpty(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:   "/home/user/project",
-		Image:       "airlock-claude:latest",
-		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
-		ProxyPort:   8080,
-		EnvFilePath: "/tmp/env.enc",
+		Workspace:    "/home/user/project",
+		Image:        "airlock-claude:latest",
+		NetworkName:  "airlock-net",
+		ClaudeDir:    "/home/user/.claude",
+		ProxyPort:    8080,
+		ShadowMounts: []secrets.ShadowMount{},
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	if len(cfg.Binds) != 3 {
-		t.Errorf("expected 3 binds without shadow, got %d: %v", len(cfg.Binds), cfg.Binds)
+	if len(cfg.Binds) != 2 {
+		t.Errorf("expected 2 binds without shadow mounts, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
 	for _, bind := range cfg.Binds {
 		if strings.Contains(bind, "/workspace/.env") {
@@ -537,13 +541,14 @@ func TestBuildClaudeConfigNoShadowWhenEmpty(t *testing.T) {
 
 func TestBuildClaudeConfigEnvShadowSubdirectory(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:     "/home/user/project",
-		Image:         "airlock-claude:latest",
-		NetworkName:   "airlock-net",
-		ClaudeDir:     "/home/user/.claude",
-		ProxyPort:     8080,
-		EnvFilePath:   "/tmp/airlock-xyz/env.enc",
-		EnvShadowPath: "/workspace/config/.env.production",
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   8080,
+		ShadowMounts: []secrets.ShadowMount{
+			{HostPath: "/tmp/airlock-xyz/env.enc", ContainerPath: "/workspace/config/.env.production"},
+		},
 	}
 	cfg := container.BuildClaudeConfig(opts)
 

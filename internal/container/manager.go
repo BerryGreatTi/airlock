@@ -3,6 +3,8 @@ package container
 import (
 	"fmt"
 	"strings"
+
+	"github.com/taeikkim92/airlock/internal/secrets"
 )
 
 // RunOpts holds all options needed to launch the airlock container pair.
@@ -12,8 +14,7 @@ type RunOpts struct {
 	Image            string
 	ProxyImage       string
 	NetworkName      string
-	EnvFilePath      string
-	EnvShadowPath    string   // container path to shadow plaintext env file (e.g., "/workspace/.env")
+	ShadowMounts     []secrets.ShadowMount
 	MappingPath      string
 	ClaudeDir        string
 	CACertPath       string
@@ -97,14 +98,11 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 		fmt.Sprintf("%s:/workspace", opts.Workspace),
 		fmt.Sprintf("%s:/home/airlock/.claude:ro", opts.ClaudeDir),
 	}
-	if opts.EnvFilePath != "" {
-		binds = append(binds, fmt.Sprintf("%s:/run/airlock/env.enc:ro", opts.EnvFilePath))
-	}
-	if opts.EnvShadowPath != "" {
-		binds = append(binds, fmt.Sprintf("%s:%s:ro", opts.EnvFilePath, opts.EnvShadowPath))
-	}
 	if opts.CACertPath != "" {
 		binds = append(binds, fmt.Sprintf("%s:/usr/local/share/ca-certificates/airlock-proxy.crt:ro", opts.CACertPath))
+	}
+	for _, m := range opts.ShadowMounts {
+		binds = append(binds, fmt.Sprintf("%s:%s:ro", m.HostPath, m.ContainerPath))
 	}
 
 	return ContainerConfig{

@@ -7,6 +7,7 @@ import (
 
 	"github.com/taeikkim92/airlock/internal/config"
 	"github.com/taeikkim92/airlock/internal/container"
+	"github.com/taeikkim92/airlock/internal/secrets"
 )
 
 // SessionParams holds everything needed to start an airlock session.
@@ -16,8 +17,7 @@ type SessionParams struct {
 	ClaudeDir   string
 	Config      config.Config
 	TmpDir      string
-	EnvFilePath   string
-	EnvShadowPath string
+	ShadowMounts  []secrets.ShadowMount
 	MappingPath   string
 }
 
@@ -44,8 +44,7 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 		Image:            cfg.ContainerImage,
 		ProxyImage:       cfg.ProxyImage,
 		NetworkName:      cfg.NetworkName,
-		EnvFilePath:      params.EnvFilePath,
-		EnvShadowPath:    params.EnvShadowPath,
+		ShadowMounts:     params.ShadowMounts,
 		MappingPath:      params.MappingPath,
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
@@ -111,8 +110,7 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 		Image:            cfg.ContainerImage,
 		ProxyImage:       cfg.ProxyImage,
 		NetworkName:      networkName,
-		EnvFilePath:      params.EnvFilePath,
-		EnvShadowPath:    params.EnvShadowPath,
+		ShadowMounts:     params.ShadowMounts,
 		MappingPath:      params.MappingPath,
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,

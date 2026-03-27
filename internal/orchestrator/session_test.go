@@ -11,6 +11,7 @@ import (
 	"github.com/taeikkim92/airlock/internal/config"
 	"github.com/taeikkim92/airlock/internal/container"
 	"github.com/taeikkim92/airlock/internal/orchestrator"
+	"github.com/taeikkim92/airlock/internal/secrets"
 )
 
 type MockRuntime struct {
@@ -130,7 +131,9 @@ func TestStartSessionWithEnvFile(t *testing.T) {
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 	params := orchestrator.SessionParams{
 		Workspace: "/tmp/test-workspace", ClaudeDir: "/home/user/.claude",
-		Config: cfg, TmpDir: tmpDir, EnvFilePath: envPath, MappingPath: mappingPath,
+		Config: cfg, TmpDir: tmpDir,
+		ShadowMounts: []secrets.ShadowMount{{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"}},
+		MappingPath:  mappingPath,
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
 	if err != nil {
@@ -150,7 +153,7 @@ func TestStartSessionWithEnvFile(t *testing.T) {
 		t.Error("proxy missing mapping bind mount")
 	}
 
-	// Verify Claude container received the env.enc bind mount
+	// Verify Claude container received the shadow mount bind
 	if mock.AttachedConfig == nil {
 		t.Fatal("claude container not started")
 	}
@@ -613,7 +616,9 @@ func TestStartDetachedSessionWithEnvFile(t *testing.T) {
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 	params := orchestrator.SessionParams{
 		ID: "env1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
-		Config: cfg, TmpDir: tmpDir, EnvFilePath: envPath, MappingPath: mappingPath,
+		Config: cfg, TmpDir: tmpDir,
+		ShadowMounts: []secrets.ShadowMount{{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"}},
+		MappingPath:  mappingPath,
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
 	if err != nil {
@@ -666,13 +671,15 @@ func TestStartSessionShadowBindPropagated(t *testing.T) {
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 
 	params := orchestrator.SessionParams{
-		Workspace:     "/tmp/test-workspace",
-		ClaudeDir:     tmpDir,
-		Config:        cfg,
-		TmpDir:        tmpDir,
-		EnvFilePath:   envPath,
-		EnvShadowPath: "/workspace/.env",
-		MappingPath:   mappingPath,
+		Workspace: "/tmp/test-workspace",
+		ClaudeDir: tmpDir,
+		Config:    cfg,
+		TmpDir:    tmpDir,
+		ShadowMounts: []secrets.ShadowMount{
+			{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"},
+			{HostPath: envPath, ContainerPath: "/workspace/.env"},
+		},
+		MappingPath: mappingPath,
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
 	if err != nil {
@@ -702,14 +709,16 @@ func TestStartDetachedSessionShadowBindPropagated(t *testing.T) {
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 
 	params := orchestrator.SessionParams{
-		ID:            "shadow-test",
-		Workspace:     "/tmp/test-workspace",
-		ClaudeDir:     tmpDir,
-		Config:        cfg,
-		TmpDir:        tmpDir,
-		EnvFilePath:   envPath,
-		EnvShadowPath: "/workspace/.env",
-		MappingPath:   mappingPath,
+		ID:        "shadow-test",
+		Workspace: "/tmp/test-workspace",
+		ClaudeDir: tmpDir,
+		Config:    cfg,
+		TmpDir:    tmpDir,
+		ShadowMounts: []secrets.ShadowMount{
+			{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"},
+			{HostPath: envPath, ContainerPath: "/workspace/.env"},
+		},
+		MappingPath: mappingPath,
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
 	if err != nil {
