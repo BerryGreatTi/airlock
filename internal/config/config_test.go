@@ -23,6 +23,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.ProxyPort != 8080 {
 		t.Errorf("expected default proxy port 8080, got %d", cfg.ProxyPort)
 	}
+	if len(cfg.PassthroughHosts) != 0 {
+		t.Errorf("expected empty passthrough hosts, got %v", cfg.PassthroughHosts)
+	}
 }
 
 func TestSaveAndLoad(t *testing.T) {

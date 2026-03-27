@@ -22,10 +22,7 @@ func Default() Config {
 		ProxyImage:     "airlock-proxy:latest",
 		NetworkName:    "airlock-net",
 		ProxyPort:      8080,
-		PassthroughHosts: []string{
-			"api.anthropic.com",
-			"auth.anthropic.com",
-		},
+		PassthroughHosts: []string{},
 	}
 }
 
