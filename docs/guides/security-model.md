@@ -18,21 +18,30 @@ Airlock assumes the host machine is trusted. The age private key resides on the 
 The agent runs inside a Docker container with minimal privileges:
 - `--cap-drop=ALL` removes all Linux capabilities
 - Only the workspace directory is mounted read-write
-- `~/.claude/` is mounted read-only (for authentication)
+- `~/.claude/` is mounted read-only (for authentication and settings)
+- Sensitive files (`.env`, `settings.json`) are shadow-mounted with encrypted versions, so the agent reads only `ENC[age:...]` ciphertext even when accessing them directly
 - No direct network access (internal Docker network)
 
 **Blast radius:** Even in the worst case, damage is limited to the mounted workspace directory.
 
 ### Layer 2: Secret Encryption
 
-All secrets are encrypted with [age](https://age-encryption.org/) (X25519) before entering the container:
+All secrets are encrypted with [age](https://age-encryption.org/) (X25519) before entering the container. A modular Scanner pipeline discovers and encrypts secrets across multiple config formats:
+
+| Source | Scanner | Scope |
+|--------|---------|-------|
+| `.env` files | `EnvScanner` | All values encrypted unconditionally |
+| `.claude/settings.json` | `ClaudeScanner` | Heuristic detection (key name + value prefix) |
+| `.claude/settings.local.json` | `ClaudeScanner` | Same heuristic |
 
 ```
-Host:      STRIPE_KEY=sk_live_abc123
-Container: STRIPE_KEY=ENC[age:YWdlLWVuY3J5cHRpb24...]
+Host settings.json:  "SLACK_TOKEN": "xoxb-1234-abcdef"
+Container:           "SLACK_TOKEN": "ENC[age:YWdlLWVuY3J5cHRpb24...]"
 ```
 
 The agent sees only `ENC[age:...]` ciphertext. Even if it copies the value into source code or sends it to an LLM, the actual secret remains protected.
+
+**Heuristic detection** identifies secrets by key name (contains `token`, `key`, `secret`, `password`, `credential`, `auth`) and value prefix (known patterns like `sk-`, `xoxb-`, `ghp_`, `AKIA`, `eyJ`). Non-secret values (feature flags, paths, URLs) are left as plaintext. See [ADR-0005](../decisions/ADR-0005-settings-secret-protection.md) for details.
 
 **Key management:**
 - Private key: `.airlock/keys/age.key` (host only, 0600 permissions, gitignored)
@@ -48,7 +57,9 @@ A mitmproxy sidecar intercepts outbound HTTP/HTTPS traffic from the agent contai
 3. Proxy replaces it with the decrypted plaintext value
 4. Request reaches the external API with real credentials
 
-**Passthrough:** Traffic to `api.anthropic.com` and `auth.anthropic.com` is not intercepted (no MITM on Claude API communication).
+**Full coverage by default:** All outbound traffic goes through the proxy, including Anthropic API calls. No hosts are excluded by default. Users can opt in to passthrough for specific hosts via `--passthrough-hosts` CLI flag or `passthrough_hosts` in `config.yaml`.
+
+**Response audit logging:** The proxy logs response metadata (status code, content type, size) for all traffic. Response body content is never logged.
 
 ## What This Protects
 
@@ -66,7 +77,8 @@ A mitmproxy sidecar intercepts outbound HTTP/HTTPS traffic from the agent contai
 - **Client-side crypto operations** (HMAC signing, AWS Signature V4) require the real key at computation time. The proxy cannot help here since it only replaces values in transit.
 - **Non-HTTP protocols** (direct database connections, gRPC without HTTP/2 proxy) are not intercepted.
 - **Binary request bodies** are skipped (no UTF-8 decoding attempted).
-- **Only one workspace session at a time** due to hard-coded container names in the current implementation.
+- **Non-HTTP MCP servers** that use secrets for database connections or local auth receive `ENC[age:...]` values and fail. Only HTTP-based API calls are decrypted by the proxy.
+- **Heuristic false negatives** -- secrets with unusual naming or format may not be detected in settings files. Use `.env` files for such cases (all values encrypted unconditionally).
 
 ## Recommendations for Enterprise Deployment
 
