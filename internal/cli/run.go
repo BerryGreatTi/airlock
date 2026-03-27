@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -16,8 +17,9 @@ import (
 )
 
 var (
-	runWorkspace string
-	runEnvFile   string
+	runWorkspace        string
+	runEnvFile          string
+	runPassthroughHosts string
 )
 
 var runCmd = &cobra.Command{
@@ -35,6 +37,17 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		cfg, err := config.Load(airlockDir)
 		if err != nil {
 			return fmt.Errorf("load config (run 'airlock init' first): %w", err)
+		}
+
+		if runPassthroughHosts != "" {
+			hosts := strings.Split(runPassthroughHosts, ",")
+			trimmed := make([]string, 0, len(hosts))
+			for _, h := range hosts {
+				if s := strings.TrimSpace(h); s != "" {
+					trimmed = append(trimmed, s)
+				}
+			}
+			cfg.PassthroughHosts = trimmed
 		}
 
 		workspace := runWorkspace
@@ -99,5 +112,6 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 func init() {
 	runCmd.Flags().StringVarP(&runWorkspace, "workspace", "w", "", "workspace directory (default: current directory)")
 	runCmd.Flags().StringVarP(&runEnvFile, "env", "e", "", "env file to encrypt and mount")
+	runCmd.Flags().StringVar(&runPassthroughHosts, "passthrough-hosts", "", "comma-separated hosts to skip proxy decryption (overrides config)")
 	rootCmd.AddCommand(runCmd)
 }

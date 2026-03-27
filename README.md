@@ -95,8 +95,9 @@ airlock run --env .env
 
 | Flag | Command | Description |
 |------|---------|-------------|
-| `-e, --env <file>` | run | Path to .env file (encrypted at runtime) |
-| `-w, --workspace <dir>` | run | Workspace directory (default: current dir) |
+| `-e, --env <file>` | run, start | Path to .env file (encrypted at runtime) |
+| `-w, --workspace <dir>` | run, start | Workspace directory (default: current dir) |
+| `--passthrough-hosts <hosts>` | run, start | Comma-separated hosts to skip proxy decryption (overrides config) |
 | `-o, --output <file>` | encrypt | Output path (default: `<input>.enc`) |
 
 ## Security Model

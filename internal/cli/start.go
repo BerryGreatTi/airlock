@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -25,12 +26,24 @@ type StartResult struct {
 }
 
 // RunStart encapsulates the start logic so it can be tested without cobra.
-func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, workspace, envFile, airlockDir string) (*StartResult, error) {
+// passthroughHosts overrides config.yaml when non-empty (comma-separated).
+func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, workspace, envFile, airlockDir, passthroughHosts string) (*StartResult, error) {
 	keysDir := filepath.Join(airlockDir, "keys")
 
 	cfg, err := config.Load(airlockDir)
 	if err != nil {
 		return nil, fmt.Errorf("load config (run 'airlock init' first): %w", err)
+	}
+
+	if passthroughHosts != "" {
+		hosts := strings.Split(passthroughHosts, ",")
+		trimmed := make([]string, 0, len(hosts))
+		for _, h := range hosts {
+			if s := strings.TrimSpace(h); s != "" {
+				trimmed = append(trimmed, s)
+			}
+		}
+		cfg.PassthroughHosts = trimmed
 	}
 
 	if workspace == "" {
@@ -97,9 +110,10 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 }
 
 var (
-	startID        string
-	startWorkspace string
-	startEnvFile   string
+	startID               string
+	startWorkspace        string
+	startEnvFile          string
+	startPassthroughHosts string
 )
 
 var startCmd = &cobra.Command{
@@ -118,7 +132,7 @@ Requires --id to identify this session.`,
 		}
 		defer docker.Close()
 
-		result, err := RunStart(ctx, docker, startID, startWorkspace, startEnvFile, ".airlock")
+		result, err := RunStart(ctx, docker, startID, startWorkspace, startEnvFile, ".airlock", startPassthroughHosts)
 		if err != nil {
 			return err
 		}
@@ -134,5 +148,6 @@ func init() {
 	startCmd.MarkFlagRequired("id")
 	startCmd.Flags().StringVarP(&startWorkspace, "workspace", "w", "", "workspace directory (default: current directory)")
 	startCmd.Flags().StringVarP(&startEnvFile, "env", "e", "", "env file to encrypt and mount")
+	startCmd.Flags().StringVar(&startPassthroughHosts, "passthrough-hosts", "", "comma-separated hosts to skip proxy decryption (overrides config)")
 	rootCmd.AddCommand(startCmd)
 }
