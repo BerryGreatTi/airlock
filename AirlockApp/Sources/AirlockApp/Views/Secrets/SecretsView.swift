@@ -33,6 +33,7 @@ private struct EnvEntry: Identifiable {
     }
 }
 
+@MainActor
 struct SecretsView: View {
     let workspace: Workspace
     @Bindable var appState: AppState

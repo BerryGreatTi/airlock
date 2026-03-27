@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct ContentView: View {
     @State var appState = AppState()
     @State private var containerService = ContainerSessionService()

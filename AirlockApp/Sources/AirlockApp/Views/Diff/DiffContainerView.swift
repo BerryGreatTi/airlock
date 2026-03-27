@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DiffContainerView: View {
     let workspace: Workspace
     @Bindable var appState: AppState

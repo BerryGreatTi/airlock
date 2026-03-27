@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct SidebarView: View {
     @Bindable var appState: AppState
     @Environment(\.containerService) private var containerService

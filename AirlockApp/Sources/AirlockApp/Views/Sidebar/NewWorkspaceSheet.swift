@@ -7,6 +7,7 @@ private struct PreCheck: Identifiable {
     var detail: String?
 }
 
+@MainActor
 struct NewWorkspaceSheet: View {
     @Bindable var appState: AppState
     @Environment(\.dismiss) private var dismiss

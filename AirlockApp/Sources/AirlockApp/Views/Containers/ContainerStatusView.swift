@@ -9,6 +9,7 @@ private struct ProxyLogEntry: Identifiable {
     let key: String?
 }
 
+@MainActor
 struct ContainerStatusView: View {
     let workspace: Workspace
     @Bindable var appState: AppState
@@ -246,7 +247,7 @@ struct ContainerStatusView: View {
         logProcess = nil
     }
 
-    private func parseLogLine(_ line: String) -> ProxyLogEntry? {
+    nonisolated private func parseLogLine(_ line: String) -> ProxyLogEntry? {
         guard let data = line.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let host = json["host"] as? String,
