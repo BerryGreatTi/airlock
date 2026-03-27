@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct WelcomeView: View {
     @Bindable var appState: AppState
     @Environment(\.containerService) private var containerService

@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct ContentView: View {
     @State var appState = AppState()
     @State private var containerService = ContainerSessionService()
@@ -135,7 +136,7 @@ struct ContentView: View {
     }
 
     private func reconcileRunningContainers() {
-        Task {
+        Task { @MainActor in
             guard let result = try? await containerService.status() else { return }
             guard let data = result.stdout.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -164,7 +165,7 @@ struct ContentView: View {
     }
 
     private func cleanupOrphans() {
-        Task {
+        Task { @MainActor in
             for id in orphanedContainers {
                 await containerService.stopByID(id)
             }

@@ -24,6 +24,8 @@ final class AppState {
     var selectedTab: DetailTab = .terminal
     var lastError: String?
 
+    nonisolated init() {}
+
     var selectedWorkspace: Workspace? {
         workspaces.first { $0.id == selectedWorkspaceID }
     }
