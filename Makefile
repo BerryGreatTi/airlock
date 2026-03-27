@@ -1,4 +1,4 @@
-.PHONY: build test test-python lint clean docker-build docker-clean gui-build gui-test gui-run
+.PHONY: build test test-python test-e2e lint clean docker-build docker-clean gui-build gui-test gui-run
 
 BINARY := airlock
 VERSION := 0.1.0
@@ -12,6 +12,9 @@ test:
 
 test-python:
 	cd proxy/addon && pip install -q -r requirements-dev.txt && python3 -m pytest -v
+
+test-e2e:
+	./test/e2e-proxy.sh
 
 test-all: test test-python
 
