@@ -65,7 +65,7 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 			if err != nil {
 				return fmt.Errorf("parse env file: %w", err)
 			}
-			result, err := secrets.EncryptEntries(entries, kp.PublicKey)
+			result, err := secrets.EncryptEntries(entries, kp.PublicKey, kp.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("encrypt entries: %w", err)
 			}

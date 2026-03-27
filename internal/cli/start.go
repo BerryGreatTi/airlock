@@ -63,7 +63,7 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 		if err != nil {
 			return nil, fmt.Errorf("parse env file: %w", err)
 		}
-		result, err := secrets.EncryptEntries(entries, kp.PublicKey)
+		result, err := secrets.EncryptEntries(entries, kp.PublicKey, kp.PrivateKey)
 		if err != nil {
 			return nil, fmt.Errorf("encrypt entries: %w", err)
 		}

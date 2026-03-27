@@ -24,7 +24,7 @@ func RunEncrypt(envPath, outPath, keysDir string) error {
 		return fmt.Errorf("parse env file: %w", err)
 	}
 
-	result, err := secrets.EncryptEntries(entries, kp.PublicKey)
+	result, err := secrets.EncryptEntries(entries, kp.PublicKey, kp.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("encrypt entries: %w", err)
 	}

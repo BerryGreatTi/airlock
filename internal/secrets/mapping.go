@@ -19,13 +19,28 @@ type EncryptResult struct {
 // EncryptEntries encrypts each entry's value using the given age public key,
 // wraps it in the ENC[age:...] pattern, and builds a reverse mapping
 // for the proxy to use at decryption time.
-func EncryptEntries(entries []EnvEntry, publicKey string) (EncryptResult, error) {
+func EncryptEntries(entries []EnvEntry, publicKey, privateKey string) (EncryptResult, error) {
 	result := EncryptResult{
 		Encrypted: make([]EnvEntry, 0, len(entries)),
 		Mapping:   make(map[string]string, len(entries)),
 	}
 
 	for _, entry := range entries {
+		if crypto.IsEncrypted(entry.Value) {
+			// Already encrypted: keep as-is and build mapping by decrypting
+			inner, err := crypto.UnwrapENC(entry.Value)
+			if err != nil {
+				return EncryptResult{}, fmt.Errorf("unwrap %s: %w", entry.Key, err)
+			}
+			plain, err := crypto.Decrypt(inner, privateKey)
+			if err != nil {
+				return EncryptResult{}, fmt.Errorf("decrypt %s for mapping: %w", entry.Key, err)
+			}
+			result.Encrypted = append(result.Encrypted, EnvEntry{Key: entry.Key, Value: entry.Value})
+			result.Mapping[entry.Value] = plain
+			continue
+		}
+
 		ciphertext, err := crypto.Encrypt(entry.Value, publicKey)
 		if err != nil {
 			return EncryptResult{}, fmt.Errorf("encrypt %s: %w", entry.Key, err)

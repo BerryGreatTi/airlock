@@ -13,8 +13,8 @@ PASS=0
 FAIL=0
 TESTS=()
 
-# Auto-detect Docker socket if DOCKER_HOST is not set
-if [ -z "${DOCKER_HOST:-}" ]; then
+# Auto-detect Docker socket if DOCKER_HOST is not set or docker is unreachable
+if [ -z "${DOCKER_HOST:-}" ] || ! docker info &>/dev/null; then
     for sock in "$HOME/.rd/docker.sock" "$HOME/.colima/docker.sock" "/var/run/docker.sock"; do
         if [ -S "$sock" ]; then
             export DOCKER_HOST="unix://$sock"

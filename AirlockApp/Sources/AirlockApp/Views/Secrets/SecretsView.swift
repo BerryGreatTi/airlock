@@ -203,9 +203,14 @@ struct SecretsView: View {
                 let parts = trimmed.split(separator: "=", maxSplits: 1)
                 guard parts.count == 2 else { return nil }
                 let rawValue = String(parts[1]).trimmingCharacters(in: .whitespaces)
-                let value = rawValue.hasPrefix("'") && rawValue.hasSuffix("'") && rawValue.count >= 2
-                    ? String(rawValue.dropFirst().dropLast())
-                    : rawValue
+                let value: String
+                if rawValue.count >= 2,
+                   (rawValue.hasPrefix("'") && rawValue.hasSuffix("'")) ||
+                   (rawValue.hasPrefix("\"") && rawValue.hasSuffix("\"")) {
+                    value = String(rawValue.dropFirst().dropLast())
+                } else {
+                    value = rawValue
+                }
                 return EnvEntry(
                     key: String(parts[0]).trimmingCharacters(in: .whitespaces),
                     value: value
