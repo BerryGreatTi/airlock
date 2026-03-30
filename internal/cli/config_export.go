@@ -36,14 +36,20 @@ var configExportCmd = &cobra.Command{
 			homeDir, _ := os.UserHomeDir()
 			dstDir = filepath.Join(homeDir, "airlock-claude-export")
 		}
-		if err := os.MkdirAll(dstDir, 0755); err != nil {
+		if err := os.MkdirAll(dstDir, 0o700); err != nil {
 			return fmt.Errorf("create export directory: %w", err)
 		}
-		items := defaultImportItems
+		var items []string
 		if exportItems != "" {
-			items = strings.Split(exportItems, ",")
-			for i, item := range items {
-				items[i] = strings.TrimSpace(item)
+			for _, item := range strings.Split(exportItems, ",") {
+				items = append(items, strings.TrimSpace(item))
+			}
+		} else {
+			items = append(items, defaultImportItems...)
+		}
+		for _, item := range items {
+			if !allowedImportItems[item] {
+				return fmt.Errorf("invalid export item %q", item)
 			}
 		}
 		docker, err := container.NewDocker()
@@ -66,7 +72,8 @@ var configExportCmd = &cobra.Command{
 				fmt.Sprintf("%s:/src:ro", volumeName),
 				fmt.Sprintf("%s:/dst", dstDir),
 			},
-			Cmd: []string{"sh", "-c", script},
+			CapDrop: []string{"ALL"},
+			Cmd:     []string{"sh", "-c", script},
 		}
 		fmt.Printf("Exporting from volume %s to %s...\n", volumeName, dstDir)
 		if err := docker.RunAttached(ctx, exportCfg); err != nil {

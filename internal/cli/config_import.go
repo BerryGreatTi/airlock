@@ -23,6 +23,12 @@ var (
 var defaultImportItems = []string{"CLAUDE.md", "rules", "settings.json", "settings.local.json"}
 var optionalImportItems = []string{"plugins", "skills", "history.jsonl", "projects"}
 
+var allowedImportItems = map[string]bool{
+	"CLAUDE.md": true, "rules": true, "settings.json": true,
+	"settings.local.json": true, "plugins": true, "skills": true,
+	"history.jsonl": true, "projects": true,
+}
+
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage airlock configuration",
@@ -54,13 +60,19 @@ Existing files in the volume are skipped unless --force is set.`,
 		if _, err := os.Stat(srcDir); os.IsNotExist(err) {
 			return fmt.Errorf("source directory does not exist: %s", srcDir)
 		}
-		items := defaultImportItems
+		var items []string
 		if importAll {
-			items = append(items, optionalImportItems...)
+			items = append(append(items, defaultImportItems...), optionalImportItems...)
 		} else if importItems != "" {
-			items = strings.Split(importItems, ",")
-			for i, item := range items {
-				items[i] = strings.TrimSpace(item)
+			for _, item := range strings.Split(importItems, ",") {
+				items = append(items, strings.TrimSpace(item))
+			}
+		} else {
+			items = append(items, defaultImportItems...)
+		}
+		for _, item := range items {
+			if !allowedImportItems[item] {
+				return fmt.Errorf("invalid import item %q: must be one of %v", item, defaultImportItems)
 			}
 		}
 		docker, err := container.NewDocker()
@@ -94,7 +106,8 @@ Existing files in the volume are skipped unless --force is set.`,
 				fmt.Sprintf("%s:/src:ro", srcDir),
 				fmt.Sprintf("%s:/dst", volumeName),
 			},
-			Cmd: []string{"sh", "-c", script},
+			CapDrop: []string{"ALL"},
+			Cmd:     []string{"sh", "-c", script},
 		}
 		fmt.Printf("Importing from %s into volume %s...\n", srcDir, volumeName)
 		if err := docker.RunAttached(ctx, importCfg); err != nil {
