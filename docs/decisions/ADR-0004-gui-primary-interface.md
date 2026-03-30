@@ -222,3 +222,45 @@ Parallel resolution of all 5 open GUI issues across 3 PRs (#11, #12, #13), using
 - ~~Secrets tab: Export button, per-row View/Edit actions, Key Info section~~ (still pending)
 - ~~Pre-checks: Container image existence check~~ (still pending)
 - ~~Terminal split: no 2x2 grid layout for 4 panes~~ (still pending, but pane equalization now works)
+
+## Revision (2026-03-30): Passthrough hosts GUI integration
+
+Connected the GUI Settings passthrough hosts field to the CLI `--passthrough-hosts` flag. Previously, editing passthrough hosts in Settings had no effect.
+
+### Changes
+
+| File | Change |
+|------|--------|
+| `Models/AppState.swift` | Default `passthroughHosts` changed from `["api.anthropic.com", "auth.anthropic.com"]` to `[]` (full proxy coverage by default) |
+| `Models/AppState.swift` | `performActivation` loads settings from `WorkspaceStore` and passes to service |
+| `Services/ContainerSessionService.swift` | `activate`/`activateAndWaitReady` accept `settings: AppSettings`, always pass `--passthrough-hosts` flag |
+| `Views/Settings/SettingsView.swift` | Hint text changed from "MITM excluded" to "skip proxy decryption" |
+| `Views/Containers/ContainerStatusView.swift` | Added `response` action (purple) color mapping and summary counter |
+
+### CLI fix: empty passthrough override
+
+During GUI testing, discovered that `--passthrough-hosts ""` did not override `config.yaml` defaults because the CLI only checked `if passthroughHosts != ""`. Fixed by adding a `passthroughOverride bool` parameter to `RunStart` and using `cmd.Flags().Changed("passthrough-hosts")` in both `start` and `run` commands. The GUI now always passes the flag, so an empty Settings field correctly clears config.yaml passthrough hosts.
+
+### Container OAuth discovery
+
+Manual testing revealed two container authentication issues (tracked as GitHub issues):
+
+| Issue | Finding |
+|-------|---------|
+| #14 | Settings UI mixes global and per-workspace settings; needs separation |
+| #15 | `~/.claude` mounted read-only prevents OAuth token persistence; `claude auth login` succeeds but token is lost on container restart |
+
+OAuth workaround: users can authenticate via `claude auth login` inside the container terminal and manually paste the callback URL. Authentication works per-session but does not persist across restarts.
+
+### Verification results
+
+| # | Test | Result |
+|---|------|--------|
+| 1 | Settings default empty | PASS |
+| 2 | Save/load passthrough hosts | PASS |
+| 3 | CLI flag with hosts (passthrough) | PASS |
+| 4 | CLI flag empty (none) | PASS |
+| 5 | Response action purple + counter | PASS |
+| 6 | Hint text updated | PASS |
+| 7 | Claude Code execution | BLOCKED (#15) |
+| 8 | Claude Code settings parity | BLOCKED (#15) |

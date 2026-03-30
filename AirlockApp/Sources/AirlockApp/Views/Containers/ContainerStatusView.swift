@@ -18,6 +18,7 @@ struct ContainerStatusView: View {
     @State private var autoScroll = true
     @State private var decryptCount = 0
     @State private var passthroughCount = 0
+    @State private var responseCount = 0
     @State private var noneCount = 0
 
     var body: some View {
@@ -112,6 +113,7 @@ struct ContainerStatusView: View {
                 logEntries.removeAll()
                 decryptCount = 0
                 passthroughCount = 0
+                responseCount = 0
                 noneCount = 0
             }
             .controlSize(.small)
@@ -169,6 +171,10 @@ struct ContainerStatusView: View {
                 Text("\(passthroughCount) passthrough")
             }
             HStack(spacing: 4) {
+                Circle().fill(.purple).frame(width: 6, height: 6)
+                Text("\(responseCount) response")
+            }
+            HStack(spacing: 4) {
                 Circle().fill(.secondary).frame(width: 6, height: 6)
                 Text("\(noneCount) none")
             }
@@ -192,6 +198,7 @@ struct ContainerStatusView: View {
         switch action {
         case "decrypt": return .green
         case "passthrough": return .blue
+        case "response": return .purple
         default: return .secondary
         }
     }
@@ -223,6 +230,7 @@ struct ContainerStatusView: View {
                         switch entry.action {
                         case "decrypt": self.decryptCount += 1
                         case "passthrough": self.passthroughCount += 1
+                        case "response": self.responseCount += 1
                         default: self.noneCount += 1
                         }
                     }

@@ -78,7 +78,9 @@ final class AppState {
         activationStates[workspace.id] = .activating
         lastError = nil
         do {
-            _ = try await service.activateAndWaitReady(workspace: workspace)
+            let store = WorkspaceStore()
+            let settings = (try? store.loadSettings()) ?? AppSettings()
+            _ = try await service.activateAndWaitReady(workspace: workspace, settings: settings)
             activationStates[workspace.id] = .active
             if let idx = workspaces.firstIndex(where: { $0.id == workspace.id }) {
                 workspaces[idx].isActive = true
@@ -105,5 +107,5 @@ struct AppSettings: Codable, Equatable {
     var airlockBinaryPath: String?
     var containerImage: String = "airlock-claude:latest"
     var proxyImage: String = "airlock-proxy:latest"
-    var passthroughHosts: [String] = ["api.anthropic.com", "auth.anthropic.com"]
+    var passthroughHosts: [String] = []
 }

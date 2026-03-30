@@ -39,15 +39,19 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 			return fmt.Errorf("load config (run 'airlock init' first): %w", err)
 		}
 
-		if runPassthroughHosts != "" {
-			hosts := strings.Split(runPassthroughHosts, ",")
-			trimmed := make([]string, 0, len(hosts))
-			for _, h := range hosts {
-				if s := strings.TrimSpace(h); s != "" {
-					trimmed = append(trimmed, s)
+		if cmd.Flags().Changed("passthrough-hosts") {
+			if runPassthroughHosts == "" {
+				cfg.PassthroughHosts = nil
+			} else {
+				hosts := strings.Split(runPassthroughHosts, ",")
+				trimmed := make([]string, 0, len(hosts))
+				for _, h := range hosts {
+					if s := strings.TrimSpace(h); s != "" {
+						trimmed = append(trimmed, s)
+					}
 				}
+				cfg.PassthroughHosts = trimmed
 			}
-			cfg.PassthroughHosts = trimmed
 		}
 
 		workspace := runWorkspace

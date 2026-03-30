@@ -127,14 +127,42 @@ The proxy's mitmproxy CA certificate must be trusted inside the agent container.
 
 ### Requests to Claude API are being intercepted
 
-Claude API traffic (`api.anthropic.com`, `auth.anthropic.com`) should pass through without MITM. If intercepted:
-1. Check `.airlock/config.yaml` includes anthropic hosts in `passthrough_hosts`
-2. Default config should have them. If missing, add:
+By default, all traffic (including Anthropic API) goes through the decryption proxy. This is intentional -- it allows the proxy to replace `ENC[age:...]` tokens in API key headers.
+
+If you want Anthropic traffic to bypass the proxy (e.g., using OAuth instead of API keys):
+1. **GUI**: Add `api.anthropic.com` and `auth.anthropic.com` to Settings > Passthrough hosts
+2. **CLI**: Pass `--passthrough-hosts "api.anthropic.com,auth.anthropic.com"`
+3. **Config**: Add to `.airlock/config.yaml`:
    ```yaml
    passthrough_hosts:
      - api.anthropic.com
      - auth.anthropic.com
    ```
+
+Note: The GUI always passes `--passthrough-hosts` to the CLI, overriding `config.yaml`. An empty passthrough hosts field in Settings means all traffic goes through the proxy.
+
+## Claude Code Authentication
+
+### OAuth login inside container
+
+Claude Code uses OAuth for authentication. On macOS, tokens are stored in Keychain, which is not accessible from inside a Docker container. To authenticate inside the container:
+
+1. Open the terminal tab for the workspace
+2. Run `claude auth login`
+3. A URL will be displayed -- copy it and open in your host browser
+4. Complete the OAuth flow in the browser
+5. Copy the callback URL and paste it back into the container terminal
+
+**Known limitation:** The `~/.claude` directory is mounted read-only, so OAuth tokens cannot be persisted. You must re-authenticate after each container restart. See [GitHub issue #15](https://github.com/BerryGreatTi/airlock/issues/15) for progress on a permanent solution.
+
+### "Not logged in" after successful auth login
+
+If `claude auth login` succeeds but `claude` still prompts for login, this is because the read-only `~/.claude` mount prevents token storage. The token is lost immediately after the login flow completes. This is tracked in [issue #15](https://github.com/BerryGreatTi/airlock/issues/15).
+
+Workaround: Use an API key via `.env` file instead of OAuth:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
 ## General
 

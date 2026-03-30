@@ -26,8 +26,9 @@ type StartResult struct {
 }
 
 // RunStart encapsulates the start logic so it can be tested without cobra.
-// passthroughHosts overrides config.yaml when non-empty (comma-separated).
-func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, workspace, envFile, airlockDir, passthroughHosts string) (*StartResult, error) {
+// When passthroughOverride is true, passthroughHosts replaces config.yaml
+// (even if empty, which clears the list).
+func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, workspace, envFile, airlockDir, passthroughHosts string, passthroughOverride bool) (*StartResult, error) {
 	keysDir := filepath.Join(airlockDir, "keys")
 
 	cfg, err := config.Load(airlockDir)
@@ -35,15 +36,19 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 		return nil, fmt.Errorf("load config (run 'airlock init' first): %w", err)
 	}
 
-	if passthroughHosts != "" {
-		hosts := strings.Split(passthroughHosts, ",")
-		trimmed := make([]string, 0, len(hosts))
-		for _, h := range hosts {
-			if s := strings.TrimSpace(h); s != "" {
-				trimmed = append(trimmed, s)
+	if passthroughOverride {
+		if passthroughHosts == "" {
+			cfg.PassthroughHosts = nil
+		} else {
+			hosts := strings.Split(passthroughHosts, ",")
+			trimmed := make([]string, 0, len(hosts))
+			for _, h := range hosts {
+				if s := strings.TrimSpace(h); s != "" {
+					trimmed = append(trimmed, s)
+				}
 			}
+			cfg.PassthroughHosts = trimmed
 		}
-		cfg.PassthroughHosts = trimmed
 	}
 
 	if workspace == "" {
@@ -132,7 +137,7 @@ Requires --id to identify this session.`,
 		}
 		defer docker.Close()
 
-		result, err := RunStart(ctx, docker, startID, startWorkspace, startEnvFile, ".airlock", startPassthroughHosts)
+		result, err := RunStart(ctx, docker, startID, startWorkspace, startEnvFile, ".airlock", startPassthroughHosts, cmd.Flags().Changed("passthrough-hosts"))
 		if err != nil {
 			return err
 		}

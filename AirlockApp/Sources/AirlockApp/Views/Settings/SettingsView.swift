@@ -25,7 +25,7 @@ struct SettingsView: View {
             }
 
             Section("Network") {
-                Text("Passthrough hosts (MITM excluded, one per line)")
+                Text("Passthrough hosts (skip proxy decryption, one per line)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextEditor(text: $passthroughText)
