@@ -17,7 +17,8 @@ type RunOpts struct {
 	NetworkName      string
 	ShadowMounts     []secrets.ShadowMount
 	MappingPath      string
-	ClaudeDir        string
+	VolumeName       string
+	ClaudeDir        string // Deprecated: use VolumeName for writable volume mount.
 	CACertPath       string
 	ProxyPort        int
 	PassthroughHosts []string
@@ -98,8 +99,19 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 
 	binds := []string{
 		fmt.Sprintf("%s:/workspace", opts.Workspace),
-		fmt.Sprintf("%s:/home/airlock/.claude:ro", opts.ClaudeDir),
 	}
+
+	var mounts []mount.Mount
+	if opts.VolumeName != "" {
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeVolume,
+			Source: opts.VolumeName,
+			Target: "/home/airlock/.claude",
+		})
+	} else if opts.ClaudeDir != "" {
+		binds = append(binds, fmt.Sprintf("%s:/home/airlock/.claude:ro", opts.ClaudeDir))
+	}
+
 	if opts.CACertPath != "" {
 		binds = append(binds, fmt.Sprintf("%s:/usr/local/share/ca-certificates/airlock-proxy.crt:ro", opts.CACertPath))
 	}
@@ -115,6 +127,7 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 		Tty:        true,
 		Stdin:      true,
 		Binds:      binds,
+		Mounts:     mounts,
 		Env: []string{
 			fmt.Sprintf("HTTP_PROXY=%s", proxyURL),
 			fmt.Sprintf("HTTPS_PROXY=%s", proxyURL),

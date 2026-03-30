@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/taeikkim92/airlock/internal/container"
 	"github.com/taeikkim92/airlock/internal/secrets"
 )
@@ -57,12 +58,13 @@ func TestBuildClaudeContainerConfig(t *testing.T) {
 		Workspace: "/home/user/project", Image: "airlock-claude:latest",
 		NetworkName: "airlock-net",
 		ShadowMounts: []secrets.ShadowMount{{HostPath: "/tmp/.env.enc", ContainerPath: "/run/airlock/env.enc"}},
-		ClaudeDir: "/home/user/.claude", ProxyPort: 8080, CACertPath: "/tmp/ca.pem",
+		VolumeName: "test-volume", ProxyPort: 8080, CACertPath: "/tmp/ca.pem",
 	}
 	cfg := container.BuildClaudeConfig(opts)
 	if cfg.Image != "airlock-claude:latest" {
 		t.Errorf("expected claude image, got %s", cfg.Image)
 	}
+	// workspace + ca-cert + 1 shadow mount = 3 binds; .claude is a volume mount
 	if len(cfg.Binds) < 3 {
 		t.Errorf("expected at least 3 bind mounts, got %d", len(cfg.Binds))
 	}
@@ -82,15 +84,16 @@ func TestBuildClaudeConfigWithoutOptionalFields(t *testing.T) {
 		Workspace:   "/home/user/project",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 		// ShadowMounts and CACertPath intentionally omitted
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	// Without shadow mounts and CA cert, should have exactly 2 bind mounts
-	if len(cfg.Binds) != 2 {
-		t.Errorf("expected 2 bind mounts without optional fields, got %d: %v", len(cfg.Binds), cfg.Binds)
+	// Without shadow mounts and CA cert, should have exactly 1 bind mount (workspace only)
+	// .claude is provided via volume mount
+	if len(cfg.Binds) != 1 {
+		t.Errorf("expected 1 bind mount without optional fields, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
 
 	// Verify no env.enc bind
@@ -109,24 +112,23 @@ func TestBuildClaudeConfigAllBindMounts(t *testing.T) {
 		Workspace:    "/home/user/project",
 		Image:        "airlock-claude:latest",
 		NetworkName:  "airlock-net",
-		ClaudeDir:    "/home/user/.claude",
+		VolumeName:   "test-volume",
 		ProxyPort:    8080,
 		ShadowMounts: []secrets.ShadowMount{{HostPath: "/tmp/env.enc", ContainerPath: "/run/airlock/env.enc"}},
 		CACertPath:   "/tmp/ca.pem",
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	// With all optional fields: workspace + .claude + ca-cert + 1 shadow mount = 4
-	if len(cfg.Binds) != 4 {
-		t.Errorf("expected 4 bind mounts with all optional fields, got %d: %v", len(cfg.Binds), cfg.Binds)
+	// With VolumeName: workspace + ca-cert + 1 shadow mount = 3 binds; .claude is a volume mount
+	if len(cfg.Binds) != 3 {
+		t.Errorf("expected 3 bind mounts with all optional fields, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
 
-	// Verify all bind mounts present with correct paths and modes
+	// Verify bind mounts present with correct paths and modes
 	expectations := map[string]string{
-		"/workspace":      "/home/user/project:/workspace",
-		".claude:ro":      ".claude:ro",
-		"env.enc:ro":      "env.enc:ro",
-		"ca-cert:ro":      "ca-certificates/airlock-proxy.crt:ro",
+		"/workspace": "/home/user/project:/workspace",
+		"env.enc:ro": "env.enc:ro",
+		"ca-cert:ro": "ca-certificates/airlock-proxy.crt:ro",
 	}
 	for label, substr := range expectations {
 		found := false
@@ -140,6 +142,14 @@ func TestBuildClaudeConfigAllBindMounts(t *testing.T) {
 			t.Errorf("bind mount %q not found in: %v", label, cfg.Binds)
 		}
 	}
+
+	// .claude must be a volume mount, not a bind
+	if len(cfg.Mounts) != 1 {
+		t.Fatalf("expected 1 volume mount for .claude, got %d", len(cfg.Mounts))
+	}
+	if cfg.Mounts[0].Source != "test-volume" {
+		t.Errorf("expected volume source test-volume, got %s", cfg.Mounts[0].Source)
+	}
 }
 
 func TestBuildClaudeConfigProxyEnvVars(t *testing.T) {
@@ -147,7 +157,7 @@ func TestBuildClaudeConfigProxyEnvVars(t *testing.T) {
 		Workspace:   "/tmp/ws",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   9090,
 	}
 	cfg := container.BuildClaudeConfig(opts)
@@ -179,7 +189,7 @@ func TestBuildClaudeConfigCommand(t *testing.T) {
 		Workspace:   "/tmp/ws",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 	}
 	cfg := container.BuildClaudeConfig(opts)
@@ -197,7 +207,7 @@ func TestBuildClaudeConfigSecurityDefaults(t *testing.T) {
 		Workspace:   "/tmp/ws",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 	}
 	cfg := container.BuildClaudeConfig(opts)
@@ -306,7 +316,7 @@ func TestBuildClaudeConfigWithID(t *testing.T) {
 		Workspace:   "/home/user/project",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 	}
 	cfg := container.BuildClaudeConfig(opts)
@@ -346,7 +356,7 @@ func TestBuildClaudeDetachedConfig(t *testing.T) {
 		Workspace:   "/home/user/project",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 		CACertPath:  "/tmp/ca.pem",
 	}
@@ -387,16 +397,19 @@ func TestBuildClaudeDetachedConfigPreservesBinds(t *testing.T) {
 		Workspace:    "/home/user/project",
 		Image:        "airlock-claude:latest",
 		NetworkName:  "airlock-net",
-		ClaudeDir:    "/home/user/.claude",
+		VolumeName:   "test-volume",
 		ProxyPort:    8080,
 		ShadowMounts: []secrets.ShadowMount{{HostPath: "/tmp/env.enc", ContainerPath: "/run/airlock/env.enc"}},
 		CACertPath:   "/tmp/ca.pem",
 	}
 	cfg := container.BuildClaudeDetachedConfig(opts)
 
-	// Should have all 4 bind mounts (workspace, .claude, ca-cert, 1 shadow mount)
-	if len(cfg.Binds) != 4 {
-		t.Errorf("expected 4 bind mounts, got %d: %v", len(cfg.Binds), cfg.Binds)
+	// With VolumeName: workspace + ca-cert + 1 shadow mount = 3 binds; .claude is a volume mount
+	if len(cfg.Binds) != 3 {
+		t.Errorf("expected 3 bind mounts, got %d: %v", len(cfg.Binds), cfg.Binds)
+	}
+	if len(cfg.Mounts) != 1 {
+		t.Errorf("expected 1 volume mount, got %d", len(cfg.Mounts))
 	}
 }
 
@@ -406,7 +419,7 @@ func TestBuildClaudeDetachedConfigPreservesEnv(t *testing.T) {
 		Workspace:   "/tmp/ws",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   9090,
 	}
 	cfg := container.BuildClaudeDetachedConfig(opts)
@@ -444,7 +457,7 @@ func TestBuildClaudeConfigLocaleEnv(t *testing.T) {
 		Workspace:   "/tmp/ws",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 	}
 	cfg := container.BuildClaudeConfig(opts)
@@ -491,7 +504,7 @@ func TestBuildClaudeConfigEnvShadowBind(t *testing.T) {
 		Workspace:   "/home/user/project",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 		ShadowMounts: []secrets.ShadowMount{
 			{HostPath: "/tmp/airlock-xyz/env.enc", ContainerPath: "/run/airlock/env.enc"},
@@ -500,9 +513,9 @@ func TestBuildClaudeConfigEnvShadowBind(t *testing.T) {
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	// workspace + .claude + 2 shadow mounts = 4
-	if len(cfg.Binds) != 4 {
-		t.Errorf("expected 4 binds with shadow, got %d: %v", len(cfg.Binds), cfg.Binds)
+	// workspace + 2 shadow mounts = 3 binds; .claude is a volume mount
+	if len(cfg.Binds) != 3 {
+		t.Errorf("expected 3 binds with shadow, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
 	foundShadow := false
 	for _, bind := range cfg.Binds {
@@ -523,14 +536,15 @@ func TestBuildClaudeConfigNoShadowWhenEmpty(t *testing.T) {
 		Workspace:    "/home/user/project",
 		Image:        "airlock-claude:latest",
 		NetworkName:  "airlock-net",
-		ClaudeDir:    "/home/user/.claude",
+		VolumeName:   "test-volume",
 		ProxyPort:    8080,
 		ShadowMounts: []secrets.ShadowMount{},
 	}
 	cfg := container.BuildClaudeConfig(opts)
 
-	if len(cfg.Binds) != 2 {
-		t.Errorf("expected 2 binds without shadow mounts, got %d: %v", len(cfg.Binds), cfg.Binds)
+	// workspace only = 1 bind; .claude is a volume mount
+	if len(cfg.Binds) != 1 {
+		t.Errorf("expected 1 bind without shadow mounts, got %d: %v", len(cfg.Binds), cfg.Binds)
 	}
 	for _, bind := range cfg.Binds {
 		if strings.Contains(bind, "/workspace/.env") {
@@ -544,7 +558,7 @@ func TestBuildClaudeConfigEnvShadowSubdirectory(t *testing.T) {
 		Workspace:   "/home/user/project",
 		Image:       "airlock-claude:latest",
 		NetworkName: "airlock-net",
-		ClaudeDir:   "/home/user/.claude",
+		VolumeName:  "test-volume",
 		ProxyPort:   8080,
 		ShadowMounts: []secrets.ShadowMount{
 			{HostPath: "/tmp/airlock-xyz/env.enc", ContainerPath: "/workspace/config/.env.production"},
@@ -560,5 +574,60 @@ func TestBuildClaudeConfigEnvShadowSubdirectory(t *testing.T) {
 	}
 	if !foundShadow {
 		t.Errorf("subdirectory shadow bind not found in: %v", cfg.Binds)
+	}
+}
+
+func TestBuildClaudeConfigWithVolume(t *testing.T) {
+	opts := container.RunOpts{
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		VolumeName:  "airlock-claude-home",
+		ProxyPort:   8080,
+	}
+	cfg := container.BuildClaudeConfig(opts)
+	for _, bind := range cfg.Binds {
+		if strings.Contains(bind, ".claude") {
+			t.Errorf("should not have .claude bind mount when VolumeName is set, got: %s", bind)
+		}
+	}
+	if len(cfg.Binds) != 1 {
+		t.Errorf("expected 1 bind mount (workspace only), got %d: %v", len(cfg.Binds), cfg.Binds)
+	}
+	if len(cfg.Mounts) != 1 {
+		t.Fatalf("expected 1 volume mount, got %d", len(cfg.Mounts))
+	}
+	m := cfg.Mounts[0]
+	if m.Type != mount.TypeVolume {
+		t.Errorf("expected volume mount type, got %s", m.Type)
+	}
+	if m.Source != "airlock-claude-home" {
+		t.Errorf("expected source airlock-claude-home, got %s", m.Source)
+	}
+	if m.Target != "/home/airlock/.claude" {
+		t.Errorf("expected target /home/airlock/.claude, got %s", m.Target)
+	}
+}
+
+func TestBuildClaudeConfigWithClaudeDirFallback(t *testing.T) {
+	opts := container.RunOpts{
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		NetworkName: "airlock-net",
+		ClaudeDir:   "/home/user/.claude",
+		ProxyPort:   8080,
+	}
+	cfg := container.BuildClaudeConfig(opts)
+	if len(cfg.Mounts) != 0 {
+		t.Errorf("expected 0 volume mounts for ClaudeDir fallback, got %d", len(cfg.Mounts))
+	}
+	foundClaude := false
+	for _, bind := range cfg.Binds {
+		if strings.Contains(bind, ".claude:ro") {
+			foundClaude = true
+		}
+	}
+	if !foundClaude {
+		t.Errorf(".claude bind mount not found in fallback mode: %v", cfg.Binds)
 	}
 }

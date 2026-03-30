@@ -98,6 +98,18 @@ func (m *MockRuntime) ListContainers(_ context.Context, prefix string) ([]contai
 	return nil, nil
 }
 
+func (m *MockRuntime) EnsureVolume(_ context.Context, name string) error {
+	return nil
+}
+
+func (m *MockRuntime) RemoveVolume(_ context.Context, name string) error {
+	return nil
+}
+
+func (m *MockRuntime) ReadFromVolume(_ context.Context, volumeName, filePath, dstPath string) error {
+	return os.ErrNotExist
+}
+
 func TestStartSessionCreatesNetworkAndContainers(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
