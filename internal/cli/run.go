@@ -73,17 +73,26 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		}
 		workspace, _ = filepath.Abs(workspace)
 
+		volumeName := cfg.VolumeName
+		if volumeName == "" {
+			volumeName = "airlock-claude-home"
+		}
 		homeDir, _ := os.UserHomeDir()
-		claudeDir := filepath.Join(homeDir, ".claude")
 
 		tmpDir, _ := os.MkdirTemp("", "airlock-*")
 		defer os.RemoveAll(tmpDir)
 
+		docker, err := container.NewDocker()
+		if err != nil {
+			return fmt.Errorf("docker init: %w", err)
+		}
+		defer docker.Close()
+
 		params := orchestrator.SessionParams{
-			Workspace: workspace,
-			ClaudeDir: claudeDir,
-			Config:    cfg,
-			TmpDir:    tmpDir,
+			Workspace:  workspace,
+			VolumeName: volumeName,
+			Config:     cfg,
+			TmpDir:     tmpDir,
 		}
 
 		kp, kpErr := crypto.LoadKeyPair(keysDir)
@@ -94,12 +103,17 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 			if runEnvFile != "" {
 				scanners = append(scanners, secrets.NewEnvScanner(runEnvFile, workspace))
 			}
+			volSettingsDir, extractErr := orchestrator.ExtractVolumeSettings(ctx, docker, volumeName, tmpDir)
+			if extractErr != nil {
+				return fmt.Errorf("extract volume settings: %w", extractErr)
+			}
 			scanResult, err := secrets.ScanAll(scanners, secrets.ScanOpts{
-				Workspace:  workspace,
-				HomeDir:    homeDir,
-				PublicKey:  kp.PublicKey,
-				PrivateKey: kp.PrivateKey,
-				TmpDir:     tmpDir,
+				Workspace:         workspace,
+				HomeDir:           homeDir,
+				PublicKey:         kp.PublicKey,
+				PrivateKey:        kp.PrivateKey,
+				TmpDir:            tmpDir,
+				VolumeSettingsDir: volSettingsDir,
 			})
 			if err != nil {
 				return fmt.Errorf("scan secrets: %w", err)
@@ -113,12 +127,6 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 				params.MappingPath = mappingPath
 			}
 		}
-
-		docker, err := container.NewDocker()
-		if err != nil {
-			return fmt.Errorf("docker init: %w", err)
-		}
-		defer docker.Close()
 
 		err = orchestrator.StartSession(ctx, docker, params)
 		orchestrator.CleanupSession(ctx, docker, cfg, "")
