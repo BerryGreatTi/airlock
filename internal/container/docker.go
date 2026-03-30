@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
@@ -263,6 +264,9 @@ func (d *Docker) EnsureVolume(ctx context.Context, name string) error {
 	if err == nil {
 		return nil
 	}
+	if !errdefs.IsNotFound(err) {
+		return fmt.Errorf("inspect volume %s: %w", name, err)
+	}
 	_, err = d.client.VolumeCreate(ctx, volume.CreateOptions{Name: name})
 	if err != nil {
 		return fmt.Errorf("create volume %s: %w", name, err)
@@ -279,7 +283,7 @@ func (d *Docker) RemoveVolume(ctx context.Context, name string) error {
 // filePath out to dstPath on the host. Returns os.ErrNotExist if the file is
 // not present in the volume.
 func (d *Docker) ReadFromVolume(ctx context.Context, volumeName, filePath, dstPath string) error {
-	tmpName := "airlock-vol-reader"
+	tmpName := fmt.Sprintf("airlock-vol-reader-%d", time.Now().UnixNano())
 	containerConfig := &dockercontainer.Config{
 		Image: "alpine:latest",
 		Cmd:   []string{"sleep", "30"},
@@ -300,10 +304,14 @@ func (d *Docker) ReadFromVolume(ctx context.Context, volumeName, filePath, dstPa
 	if err := d.client.ContainerStart(ctx, resp.ID, dockercontainer.StartOptions{}); err != nil {
 		return fmt.Errorf("start reader container: %w", err)
 	}
-	srcPath := filepath.Join("/vol", filePath)
+	clean := filepath.Clean(filePath)
+	if strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
+		return fmt.Errorf("invalid file path: %s", filePath)
+	}
+	srcPath := filepath.Join("/vol", clean)
 	err = d.CopyFromContainer(ctx, tmpName, srcPath, dstPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "No such") || strings.Contains(err.Error(), "not found") {
+		if errdefs.IsNotFound(err) {
 			return os.ErrNotExist
 		}
 		return err

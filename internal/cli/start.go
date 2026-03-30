@@ -77,6 +77,10 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 
+	if err := runtime.EnsureVolume(ctx, volumeName); err != nil {
+		return nil, fmt.Errorf("ensure volume: %w", err)
+	}
+
 	params := orchestrator.SessionParams{
 		ID:         id,
 		Workspace:  workspace,

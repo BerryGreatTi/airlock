@@ -88,6 +88,10 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		}
 		defer docker.Close()
 
+		if err := docker.EnsureVolume(ctx, volumeName); err != nil {
+			return fmt.Errorf("ensure volume: %w", err)
+		}
+
 		params := orchestrator.SessionParams{
 			Workspace:  workspace,
 			VolumeName: volumeName,

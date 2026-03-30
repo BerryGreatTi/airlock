@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,13 +29,13 @@ type SessionParams struct {
 // path. Files that do not exist in the volume are silently skipped.
 func ExtractVolumeSettings(ctx context.Context, runtime container.ContainerRuntime, volumeName, tmpDir string) (string, error) {
 	dir := filepath.Join(tmpDir, "vol-settings")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create vol-settings dir: %w", err)
 	}
 	for _, name := range []string{"settings.json", "settings.local.json"} {
 		dst := filepath.Join(dir, name)
 		err := runtime.ReadFromVolume(ctx, volumeName, name, dst)
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("read %s from volume: %w", name, err)
 		}
 	}

@@ -2,11 +2,14 @@ package container
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/taeikkim92/airlock/internal/secrets"
 )
+
+var dockerNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 // RunOpts holds all options needed to launch the airlock container pair.
 type RunOpts struct {
@@ -31,6 +34,9 @@ func (o RunOpts) Validate() error {
 	}
 	if o.Image == "" {
 		return fmt.Errorf("container image is required")
+	}
+	if o.VolumeName != "" && !dockerNameRe.MatchString(o.VolumeName) {
+		return fmt.Errorf("invalid volume name %q: must match [a-zA-Z0-9][a-zA-Z0-9_.-]*", o.VolumeName)
 	}
 	return nil
 }
