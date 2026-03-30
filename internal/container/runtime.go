@@ -22,4 +22,9 @@ type ContainerRuntime interface {
 	CopyFromContainer(ctx context.Context, containerName, srcPath, dstPath string) error
 	WaitForFile(ctx context.Context, containerName, path string, maxRetries int) error
 	ListContainers(ctx context.Context, prefix string) ([]ContainerInfo, error)
+	EnsureVolume(ctx context.Context, name string) error
+	RemoveVolume(ctx context.Context, name string) error
+	// ReadFromVolume reads filePath from the named volume and writes it to dstPath on the host.
+	// Returns os.ErrNotExist if the file is not present in the volume.
+	ReadFromVolume(ctx context.Context, volumeName, filePath, dstPath string) error
 }
