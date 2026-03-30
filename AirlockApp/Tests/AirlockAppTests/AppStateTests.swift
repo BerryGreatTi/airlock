@@ -60,6 +60,36 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.statusFor(ws), .error("activation failed"))
     }
 
+    func testResolvedSettingsUsesWorkspaceOverrides() {
+        var global = AppSettings()
+        global.containerImage = "default:v1"
+        global.proxyImage = "default-proxy:v1"
+        global.passthroughHosts = ["host1.com"]
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.containerImageOverride = "custom:v2"
+        ws.proxyImageOverride = "custom-proxy:v2"
+        ws.passthroughHostsOverride = ["host2.com"]
+        ws.proxyPortOverride = 9090
+        let resolved = ResolvedSettings(global: global, workspace: ws)
+        XCTAssertEqual(resolved.containerImage, "custom:v2")
+        XCTAssertEqual(resolved.proxyImage, "custom-proxy:v2")
+        XCTAssertEqual(resolved.passthroughHosts, ["host2.com"])
+        XCTAssertEqual(resolved.proxyPort, 9090)
+    }
+
+    func testResolvedSettingsFallsBackToGlobal() {
+        var global = AppSettings()
+        global.containerImage = "global:latest"
+        global.proxyImage = "global-proxy:latest"
+        global.passthroughHosts = ["api.example.com"]
+        let ws = Workspace(name: "test", path: "/tmp")
+        let resolved = ResolvedSettings(global: global, workspace: ws)
+        XCTAssertEqual(resolved.containerImage, "global:latest")
+        XCTAssertEqual(resolved.proxyImage, "global-proxy:latest")
+        XCTAssertEqual(resolved.passthroughHosts, ["api.example.com"])
+        XCTAssertEqual(resolved.proxyPort, 8080)
+    }
+
     func testDetailTabCases() {
         let tabs: [DetailTab] = [.terminal, .secrets, .containers, .diff, .settings]
         XCTAssertEqual(tabs.count, 5)

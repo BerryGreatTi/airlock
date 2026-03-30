@@ -19,12 +19,15 @@ final class ContainerSessionService {
         self.cli = cli
     }
 
-    func activate(workspace: Workspace, settings: AppSettings) async throws -> CLIResult {
+    func activate(workspace: Workspace, resolved: ResolvedSettings) async throws -> CLIResult {
         var args = ["start", "--id", workspace.shortID]
         if let envFile = workspace.envFilePath {
             args += ["--env", envFile]
         }
-        args += ["--passthrough-hosts", settings.passthroughHosts.joined(separator: ",")]
+        args += ["--passthrough-hosts", resolved.passthroughHosts.joined(separator: ",")]
+        args += ["--proxy-port", String(resolved.proxyPort)]
+        args += ["--container-image", resolved.containerImage]
+        args += ["--proxy-image", resolved.proxyImage]
         let result = try await cli.run(args: args, workingDirectory: workspace.path)
         if result.exitCode != 0 {
             throw NSError(
@@ -69,8 +72,8 @@ final class ContainerSessionService {
         }
     }
 
-    func activateAndWaitReady(workspace: Workspace, settings: AppSettings) async throws -> CLIResult {
-        let result = try await activate(workspace: workspace, settings: settings)
+    func activateAndWaitReady(workspace: Workspace, resolved: ResolvedSettings) async throws -> CLIResult {
+        let result = try await activate(workspace: workspace, resolved: resolved)
         try await waitForContainerReady(containerName: workspace.containerName)
         return result
     }

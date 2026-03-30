@@ -20,6 +20,9 @@ var (
 	runWorkspace        string
 	runEnvFile          string
 	runPassthroughHosts string
+	runProxyPort        int
+	runContainerImage   string
+	runProxyImage       string
 )
 
 var runCmd = &cobra.Command{
@@ -52,6 +55,16 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 				}
 				cfg.PassthroughHosts = trimmed
 			}
+		}
+
+		if cmd.Flags().Changed("proxy-port") && runProxyPort > 0 {
+			cfg.ProxyPort = runProxyPort
+		}
+		if runContainerImage != "" {
+			cfg.ContainerImage = runContainerImage
+		}
+		if runProxyImage != "" {
+			cfg.ProxyImage = runProxyImage
 		}
 
 		workspace := runWorkspace
@@ -117,5 +130,8 @@ func init() {
 	runCmd.Flags().StringVarP(&runWorkspace, "workspace", "w", "", "workspace directory (default: current directory)")
 	runCmd.Flags().StringVarP(&runEnvFile, "env", "e", "", "env file to encrypt and mount")
 	runCmd.Flags().StringVar(&runPassthroughHosts, "passthrough-hosts", "", "comma-separated hosts to skip proxy decryption (overrides config)")
+	runCmd.Flags().IntVar(&runProxyPort, "proxy-port", 0, "proxy listening port (overrides config, default 8080)")
+	runCmd.Flags().StringVar(&runContainerImage, "container-image", "", "container image (overrides config)")
+	runCmd.Flags().StringVar(&runProxyImage, "proxy-image", "", "proxy image (overrides config)")
 	rootCmd.AddCommand(runCmd)
 }

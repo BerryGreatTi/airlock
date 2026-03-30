@@ -28,7 +28,7 @@ type StartResult struct {
 // RunStart encapsulates the start logic so it can be tested without cobra.
 // When passthroughOverride is true, passthroughHosts replaces config.yaml
 // (even if empty, which clears the list).
-func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, workspace, envFile, airlockDir, passthroughHosts string, passthroughOverride bool) (*StartResult, error) {
+func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, workspace, envFile, airlockDir, passthroughHosts string, passthroughOverride bool, proxyPort int, containerImage, proxyImage string) (*StartResult, error) {
 	keysDir := filepath.Join(airlockDir, "keys")
 
 	cfg, err := config.Load(airlockDir)
@@ -49,6 +49,16 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 			}
 			cfg.PassthroughHosts = trimmed
 		}
+	}
+
+	if proxyPort > 0 {
+		cfg.ProxyPort = proxyPort
+	}
+	if containerImage != "" {
+		cfg.ContainerImage = containerImage
+	}
+	if proxyImage != "" {
+		cfg.ProxyImage = proxyImage
 	}
 
 	if workspace == "" {
@@ -119,6 +129,9 @@ var (
 	startWorkspace        string
 	startEnvFile          string
 	startPassthroughHosts string
+	startProxyPort        int
+	startContainerImage   string
+	startProxyImage       string
 )
 
 var startCmd = &cobra.Command{
@@ -137,7 +150,7 @@ Requires --id to identify this session.`,
 		}
 		defer docker.Close()
 
-		result, err := RunStart(ctx, docker, startID, startWorkspace, startEnvFile, ".airlock", startPassthroughHosts, cmd.Flags().Changed("passthrough-hosts"))
+		result, err := RunStart(ctx, docker, startID, startWorkspace, startEnvFile, ".airlock", startPassthroughHosts, cmd.Flags().Changed("passthrough-hosts"), startProxyPort, startContainerImage, startProxyImage)
 		if err != nil {
 			return err
 		}
@@ -154,5 +167,8 @@ func init() {
 	startCmd.Flags().StringVarP(&startWorkspace, "workspace", "w", "", "workspace directory (default: current directory)")
 	startCmd.Flags().StringVarP(&startEnvFile, "env", "e", "", "env file to encrypt and mount")
 	startCmd.Flags().StringVar(&startPassthroughHosts, "passthrough-hosts", "", "comma-separated hosts to skip proxy decryption (overrides config)")
+	startCmd.Flags().IntVar(&startProxyPort, "proxy-port", 0, "proxy listening port (overrides config, default 8080)")
+	startCmd.Flags().StringVar(&startContainerImage, "container-image", "", "container image (overrides config)")
+	startCmd.Flags().StringVar(&startProxyImage, "proxy-image", "", "proxy image (overrides config)")
 	rootCmd.AddCommand(startCmd)
 }

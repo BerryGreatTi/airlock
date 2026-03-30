@@ -1,54 +1,41 @@
 import SwiftUI
 
 @MainActor
-struct SettingsView: View {
+struct GlobalSettingsSheet: View {
     @Bindable var appState: AppState
+    @Environment(\.dismiss) private var dismiss
     @State private var settings = AppSettings()
     @State private var passthroughText = ""
     @State private var saved = false
 
     var body: some View {
-        Form {
-            Section("General") {
-                HStack {
-                    TextField("Airlock binary path", text: Binding(
-                        get: { settings.airlockBinaryPath ?? "(auto-detect from PATH)" },
-                        set: { settings.airlockBinaryPath = $0.contains("auto-detect") ? nil : $0 }
-                    ))
-                    Button("Browse...") { pickBinary() }
-                }
-            }
-
-            Section("Container Defaults") {
-                TextField("Container image", text: $settings.containerImage)
-                TextField("Proxy image", text: $settings.proxyImage)
-            }
-
-            Section("Network") {
-                Text("Passthrough hosts (skip proxy decryption, one per line)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                TextEditor(text: $passthroughText)
-                    .font(.system(size: 12, design: .monospaced))
-                    .frame(height: 80)
-            }
-
-            if let workspace = appState.selectedWorkspace {
-                Section("Workspace: \(workspace.name)") {
+        VStack(spacing: 0) {
+            Form {
+                Section("General") {
                     HStack {
-                        TextField(".env file", text: Binding(
-                            get: { workspace.envFilePath ?? "" },
-                            set: { updateWorkspaceField(workspace) { $0.envFilePath = $1.isEmpty ? nil : $1 }($0) }
+                        TextField("Airlock binary path", text: Binding(
+                            get: { settings.airlockBinaryPath ?? "(auto-detect from PATH)" },
+                            set: { settings.airlockBinaryPath = $0.contains("auto-detect") ? nil : $0 }
                         ))
-                        Button("Browse...") { pickEnvFile(for: workspace) }
+                        Button("Browse...") { pickBinary() }
                     }
-                    TextField("Container image override", text: Binding(
-                        get: { workspace.containerImageOverride ?? "" },
-                        set: { updateWorkspaceField(workspace) { $0.containerImageOverride = $1.isEmpty ? nil : $1 }($0) }
-                    ))
-                    .textFieldStyle(.roundedBorder)
+                }
+
+                Section("Container Defaults") {
+                    TextField("Container image", text: $settings.containerImage)
+                    TextField("Proxy image", text: $settings.proxyImage)
+                }
+
+                Section("Network Defaults") {
+                    Text("Default passthrough hosts (skip proxy decryption, one per line)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextEditor(text: $passthroughText)
+                        .font(.system(size: 12, design: .monospaced))
+                        .frame(height: 80)
                 }
             }
+            .formStyle(.grouped)
 
             HStack {
                 Spacer()
@@ -57,12 +44,14 @@ struct SettingsView: View {
                         .foregroundStyle(.green)
                         .transition(.opacity)
                 }
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                 Button("Save") { save() }
                     .keyboardShortcut(.defaultAction)
             }
+            .padding()
         }
-        .formStyle(.grouped)
-        .padding()
+        .frame(width: 500, height: 400)
         .onAppear { load() }
     }
 
@@ -80,11 +69,12 @@ struct SettingsView: View {
 
         let store = WorkspaceStore()
         try? store.saveSettings(settings)
-        try? store.saveWorkspaces(appState.workspaces)
 
         withAnimation { saved = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            withAnimation { saved = false }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            saved = false
+            dismiss()
         }
     }
 
@@ -94,23 +84,6 @@ struct SettingsView: View {
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url {
             settings.airlockBinaryPath = url.path
-        }
-    }
-
-    private func pickEnvFile(for workspace: Workspace) {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        if panel.runModal() == .OK, let url = panel.url {
-            updateWorkspaceField(workspace) { $0.envFilePath = $1 }(url.path)
-        }
-    }
-
-    private func updateWorkspaceField(_ workspace: Workspace, _ update: @escaping (inout Workspace, String) -> Void) -> (String) -> Void {
-        return { value in
-            if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
-                update(&appState.workspaces[idx], value)
-            }
         }
     }
 }

@@ -12,6 +12,10 @@ struct TerminalActionKey: FocusedValueKey {
     typealias Value = Binding<TerminalAction?>
 }
 
+struct ShowGlobalSettingsKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
 enum TerminalAction {
     case addPane
     case splitVertical
@@ -33,6 +37,11 @@ extension FocusedValues {
         get { self[TerminalActionKey.self] }
         set { self[TerminalActionKey.self] = newValue }
     }
+
+    var showGlobalSettings: Binding<Bool>? {
+        get { self[ShowGlobalSettingsKey.self] }
+        set { self[ShowGlobalSettingsKey.self] = newValue }
+    }
 }
 
 @main
@@ -40,6 +49,7 @@ struct AirlockApp: App {
     @FocusedValue(\.appState) private var appState
     @FocusedValue(\.containerService) private var containerService
     @FocusedValue(\.terminalAction) private var terminalAction
+    @FocusedValue(\.showGlobalSettings) private var showGlobalSettings
 
     var body: some Scene {
         WindowGroup {
@@ -92,8 +102,16 @@ struct AirlockApp: App {
                 Button("Diff") { appState?.switchTab(to: .diff) }
                     .keyboardShortcut("4")
 
-                Button("Settings") { appState?.switchTab(to: .settings) }
+                Button("Workspace Settings") { appState?.switchTab(to: .settings) }
                     .keyboardShortcut("5")
+
+                Divider()
+
+                Button("Preferences...") {
+                    showGlobalSettings?.wrappedValue = true
+                }
+                .keyboardShortcut(",")
+
 
                 Divider()
 
@@ -115,7 +133,7 @@ struct AirlockApp: App {
         }
 
         Settings {
-            Text("Use the Settings tab in the main window")
+            Text("Use Cmd+, or the sidebar Settings button")
                 .frame(width: 300, height: 100)
                 .padding()
         }
@@ -124,4 +142,5 @@ struct AirlockApp: App {
 
 extension Notification.Name {
     static let airlockNewWorkspace = Notification.Name("airlockNewWorkspace")
+    static let airlockOpenGlobalSettings = Notification.Name("airlockOpenGlobalSettings")
 }

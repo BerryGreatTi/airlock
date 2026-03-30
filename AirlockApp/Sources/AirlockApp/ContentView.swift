@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var orphanedContainers: [String] = []
     @State private var showingOrphanCleanup = false
     @State private var terminalAction: TerminalAction?
+    @State private var showingGlobalSettings = false
 
     var body: some View {
         NavigationSplitView {
@@ -19,9 +20,16 @@ struct ContentView: View {
         .focusedValue(\.appState, appState)
         .focusedValue(\.containerService, containerService)
         .focusedValue(\.terminalAction, $terminalAction)
+        .focusedValue(\.showGlobalSettings, $showingGlobalSettings)
         .onAppear {
             loadState()
             reconcileRunningContainers()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .airlockOpenGlobalSettings)) { _ in
+            showingGlobalSettings = true
+        }
+        .sheet(isPresented: $showingGlobalSettings) {
+            GlobalSettingsSheet(appState: appState)
         }
         .alert("Orphaned Containers Found", isPresented: $showingOrphanCleanup) {
             Button("Clean Up") { cleanupOrphans() }
@@ -35,8 +43,6 @@ struct ContentView: View {
     private var detailContent: some View {
         if appState.workspaces.isEmpty {
             WelcomeView(appState: appState)
-        } else if appState.selectedTab == .settings {
-            SettingsView(appState: appState)
         } else if let workspace = appState.selectedWorkspace {
             VStack(spacing: 0) {
                 tabBar
@@ -58,6 +64,7 @@ struct ContentView: View {
             tabButton("Secrets", tab: .secrets, icon: "key")
             tabButton("Containers", tab: .containers, icon: "shippingbox")
             tabButton("Diff", tab: .diff, icon: "doc.text.magnifyingglass")
+            tabButton("Settings", tab: .settings, icon: "gear")
             Spacer()
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -103,7 +110,7 @@ struct ContentView: View {
                 DiffContainerView(workspace: workspace, appState: appState)
             }
             if appState.selectedTab == .settings {
-                SettingsView(appState: appState)
+                WorkspaceSettingsView(workspace: workspace, appState: appState)
             }
 
             if let error = appState.lastError {
