@@ -34,7 +34,10 @@ func Save(cfg Config, airlockDir string) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 	configPath := filepath.Join(airlockDir, "config.yaml")
-	return os.WriteFile(configPath, data, 0644)
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		return fmt.Errorf("write config %s: %w", configPath, err)
+	}
+	return nil
 }
 
 func Load(airlockDir string) (Config, error) {
@@ -43,7 +46,7 @@ func Load(airlockDir string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}
-	var cfg Config
+	cfg := Default()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config: %w", err)
 	}

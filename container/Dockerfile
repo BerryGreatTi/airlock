@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN npm install -g @anthropic-ai/claude-code
 
-RUN useradd -m -s /bin/bash -u 1001 airlock
+RUN groupadd -g 1001 airlock && useradd -m -s /bin/bash -u 1001 -g 1001 airlock
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

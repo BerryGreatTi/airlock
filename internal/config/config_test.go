@@ -26,6 +26,9 @@ func TestDefaultConfig(t *testing.T) {
 	if len(cfg.PassthroughHosts) != 0 {
 		t.Errorf("expected empty passthrough hosts, got %v", cfg.PassthroughHosts)
 	}
+	if cfg.VolumeName != "airlock-claude-home" {
+		t.Errorf("expected default volume name airlock-claude-home, got %s", cfg.VolumeName)
+	}
 }
 
 func TestSaveAndLoad(t *testing.T) {
@@ -96,7 +99,8 @@ func TestConfigVolumeNameBackwardsCompat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.VolumeName != "" {
-		t.Errorf("expected empty VolumeName for old config, got %s", loaded.VolumeName)
+	// Load applies defaults for missing fields, so VolumeName gets the default
+	if loaded.VolumeName != "airlock-claude-home" {
+		t.Errorf("expected default VolumeName for old config, got %s", loaded.VolumeName)
 	}
 }
