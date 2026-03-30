@@ -12,6 +12,7 @@ import (
 
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 )
@@ -252,6 +253,60 @@ func (d *Docker) WaitForFile(ctx context.Context, containerName, path string, ma
 		time.Sleep(time.Second)
 	}
 	return fmt.Errorf("file %s not found in container %s after %d retries", path, containerName, maxRetries)
+}
+
+// EnsureVolume creates a Docker volume with the given name if it does not already exist.
+func (d *Docker) EnsureVolume(ctx context.Context, name string) error {
+	_, err := d.client.VolumeInspect(ctx, name)
+	if err == nil {
+		return nil
+	}
+	_, err = d.client.VolumeCreate(ctx, volume.CreateOptions{Name: name})
+	if err != nil {
+		return fmt.Errorf("create volume %s: %w", name, err)
+	}
+	return nil
+}
+
+// RemoveVolume force-removes a Docker volume by name.
+func (d *Docker) RemoveVolume(ctx context.Context, name string) error {
+	return d.client.VolumeRemove(ctx, name, true)
+}
+
+// ReadFromVolume mounts the named volume into a temporary container and copies
+// filePath out to dstPath on the host. Returns os.ErrNotExist if the file is
+// not present in the volume.
+func (d *Docker) ReadFromVolume(ctx context.Context, volumeName, filePath, dstPath string) error {
+	tmpName := "airlock-vol-reader"
+	containerConfig := &dockercontainer.Config{
+		Image: "alpine:latest",
+		Cmd:   []string{"sleep", "30"},
+		User:  "1001:1001",
+	}
+	hostConfig := &dockercontainer.HostConfig{
+		Binds:      []string{fmt.Sprintf("%s:/vol:ro", volumeName)},
+		AutoRemove: true,
+	}
+	d.client.ContainerRemove(ctx, tmpName, dockercontainer.RemoveOptions{Force: true})
+	resp, err := d.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, tmpName)
+	if err != nil {
+		return fmt.Errorf("create reader container: %w", err)
+	}
+	defer func() {
+		d.client.ContainerStop(ctx, resp.ID, dockercontainer.StopOptions{})
+	}()
+	if err := d.client.ContainerStart(ctx, resp.ID, dockercontainer.StartOptions{}); err != nil {
+		return fmt.Errorf("start reader container: %w", err)
+	}
+	srcPath := filepath.Join("/vol", filePath)
+	err = d.CopyFromContainer(ctx, tmpName, srcPath, dstPath)
+	if err != nil {
+		if strings.Contains(err.Error(), "No such") || strings.Contains(err.Error(), "not found") {
+			return os.ErrNotExist
+		}
+		return err
+	}
+	return nil
 }
 
 // ListContainers returns info about containers whose name starts with the given prefix.
