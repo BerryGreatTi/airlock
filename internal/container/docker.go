@@ -65,6 +65,7 @@ func (d *Docker) EnsureNetwork(ctx context.Context, opts NetworkOpts) (string, e
 func (d *Docker) RunDetached(ctx context.Context, cfg ContainerConfig) (string, error) {
 	hostConfig := &dockercontainer.HostConfig{
 		Binds:   cfg.Binds,
+		Mounts:  cfg.Mounts,
 		CapDrop: cfg.CapDrop,
 	}
 	containerConfig := &dockercontainer.Config{
@@ -100,6 +101,7 @@ func (d *Docker) RunDetached(ctx context.Context, cfg ContainerConfig) (string, 
 func (d *Docker) RunAttached(ctx context.Context, cfg ContainerConfig) error {
 	hostConfig := &dockercontainer.HostConfig{
 		Binds:   cfg.Binds,
+		Mounts:  cfg.Mounts,
 		CapDrop: cfg.CapDrop,
 	}
 	containerConfig := &dockercontainer.Config{

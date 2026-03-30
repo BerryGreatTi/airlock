@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/taeikkim92/airlock/internal/secrets"
 )
 
@@ -38,6 +39,7 @@ type ContainerConfig struct {
 	Image      string
 	Name       string
 	Binds      []string
+	Mounts     []mount.Mount
 	Env        []string
 	Network    string
 	CapDrop    []string
