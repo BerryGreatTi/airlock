@@ -15,14 +15,15 @@ import (
 )
 
 type MockRuntime struct {
-	Networks        map[string]string
-	Containers      map[string]string
-	StoppedNames    []string
-	RemovedNames    []string
-	AttachedConfig  *container.ContainerConfig
-	DetachedConfigs []container.ContainerConfig
-	CopiedFiles     []string
-	FailOn          string
+	Networks           map[string]string
+	Containers         map[string]string
+	StoppedNames       []string
+	RemovedNames       []string
+	AttachedConfig     *container.ContainerConfig
+	DetachedConfigs    []container.ContainerConfig
+	CopiedFiles        []string
+	FailOn             string
+	readFromVolumeFunc func(ctx context.Context, volumeName, filePath, dstPath string) error
 }
 
 func NewMockRuntime() *MockRuntime {
@@ -106,7 +107,10 @@ func (m *MockRuntime) RemoveVolume(_ context.Context, name string) error {
 	return nil
 }
 
-func (m *MockRuntime) ReadFromVolume(_ context.Context, volumeName, filePath, dstPath string) error {
+func (m *MockRuntime) ReadFromVolume(ctx context.Context, volumeName, filePath, dstPath string) error {
+	if m.readFromVolumeFunc != nil {
+		return m.readFromVolumeFunc(ctx, volumeName, filePath, dstPath)
+	}
 	return os.ErrNotExist
 }
 
@@ -115,7 +119,7 @@ func TestStartSessionCreatesNetworkAndContainers(t *testing.T) {
 	cfg := config.Default()
 	tmpDir := t.TempDir()
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test-workspace", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test-workspace", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: tmpDir,
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -142,7 +146,7 @@ func TestStartSessionWithEnvFile(t *testing.T) {
 	mappingPath := filepath.Join(tmpDir, "mapping.json")
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test-workspace", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test-workspace", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: tmpDir,
 		ShadowMounts: []secrets.ShadowMount{{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"}},
 		MappingPath:  mappingPath,
@@ -293,7 +297,7 @@ func TestStartSessionNetworkFailure(t *testing.T) {
 	mock.FailOn = "EnsureNetwork"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -307,7 +311,7 @@ func TestStartSessionProxyFailure(t *testing.T) {
 	mock.FailOn = "RunDetached"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -324,7 +328,7 @@ func TestStartSessionRunAttachedFailure(t *testing.T) {
 	mock.FailOn = "RunAttached"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -345,7 +349,7 @@ func TestStartSessionWaitForFileFailure(t *testing.T) {
 	mock.FailOn = "WaitForFile"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -362,7 +366,7 @@ func TestStartSessionCopyFromContainerFailure(t *testing.T) {
 	mock.FailOn = "CopyFromContainer"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -379,7 +383,7 @@ func TestStartSessionVerifiesProxyConfig(t *testing.T) {
 	cfg := config.Default()
 	cfg.PassthroughHosts = []string{"api.anthropic.com", "custom.example.com"}
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -412,7 +416,7 @@ func TestStartSessionVerifiesClaudeConfig(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		Workspace: "/home/user/project", ClaudeDir: "/home/user/.claude",
+		Workspace: "/home/user/project", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -464,15 +468,15 @@ func TestStartSessionVerifiesClaudeConfig(t *testing.T) {
 		t.Error("workspace bind mount not found")
 	}
 
-	// Verify .claude bind (read-only)
+	// Verify .claude volume mount (writable named volume)
 	hasClaude := false
-	for _, bind := range cc.Binds {
-		if strings.Contains(bind, ".claude") && strings.Contains(bind, ":ro") {
+	for _, m := range cc.Mounts {
+		if m.Target == "/home/airlock/.claude" && m.Source == "airlock-claude-home" {
 			hasClaude = true
 		}
 	}
 	if !hasClaude {
-		t.Error(".claude read-only bind mount not found")
+		t.Error(".claude volume mount not found")
 	}
 }
 
@@ -480,7 +484,7 @@ func TestStartDetachedSession(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		ID: "test123", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "test123", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
@@ -504,7 +508,7 @@ func TestStartDetachedSessionNetworkName(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		ID: "ws42", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "ws42", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
@@ -522,7 +526,7 @@ func TestStartDetachedSessionNetworkFailure(t *testing.T) {
 	mock.FailOn = "EnsureNetwork"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "test1", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
@@ -539,7 +543,7 @@ func TestStartDetachedSessionProxyFailure(t *testing.T) {
 	mock.FailOn = "RunDetached"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "test1", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
@@ -556,7 +560,7 @@ func TestStartDetachedSessionWaitForFileFailure(t *testing.T) {
 	mock.FailOn = "WaitForFile"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "test1", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
@@ -573,7 +577,7 @@ func TestStartDetachedSessionCopyFailure(t *testing.T) {
 	mock.FailOn = "CopyFromContainer"
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		ID: "test1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "test1", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
@@ -589,7 +593,7 @@ func TestStartDetachedSessionUsesKeepAliveEntrypoint(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		ID: "keep1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "keep1", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartDetachedSession(context.Background(), mock, params)
@@ -627,7 +631,7 @@ func TestStartDetachedSessionWithEnvFile(t *testing.T) {
 	mappingPath := filepath.Join(tmpDir, "mapping.json")
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 	params := orchestrator.SessionParams{
-		ID: "env1", Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		ID: "env1", Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: tmpDir,
 		ShadowMounts: []secrets.ShadowMount{{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"}},
 		MappingPath:  mappingPath,
@@ -683,10 +687,10 @@ func TestStartSessionShadowBindPropagated(t *testing.T) {
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test-workspace",
-		ClaudeDir: tmpDir,
-		Config:    cfg,
-		TmpDir:    tmpDir,
+		Workspace:  "/tmp/test-workspace",
+		VolumeName: "airlock-claude-home",
+		Config:     cfg,
+		TmpDir:     tmpDir,
 		ShadowMounts: []secrets.ShadowMount{
 			{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"},
 			{HostPath: envPath, ContainerPath: "/workspace/.env"},
@@ -721,11 +725,11 @@ func TestStartDetachedSessionShadowBindPropagated(t *testing.T) {
 	os.WriteFile(mappingPath, []byte(`{"ENC[age:xxx]":"secret"}`), 0600)
 
 	params := orchestrator.SessionParams{
-		ID:        "shadow-test",
-		Workspace: "/tmp/test-workspace",
-		ClaudeDir: tmpDir,
-		Config:    cfg,
-		TmpDir:    tmpDir,
+		ID:         "shadow-test",
+		Workspace:  "/tmp/test-workspace",
+		VolumeName: "airlock-claude-home",
+		Config:     cfg,
+		TmpDir:     tmpDir,
 		ShadowMounts: []secrets.ShadowMount{
 			{HostPath: envPath, ContainerPath: "/run/airlock/env.enc"},
 			{HostPath: envPath, ContainerPath: "/workspace/.env"},
@@ -755,7 +759,7 @@ func TestStartSessionCACertMountedInClaude(t *testing.T) {
 	mock := NewMockRuntime()
 	cfg := config.Default()
 	params := orchestrator.SessionParams{
-		Workspace: "/tmp/test", ClaudeDir: "/home/user/.claude",
+		Workspace: "/tmp/test", VolumeName: "airlock-claude-home",
 		Config: cfg, TmpDir: t.TempDir(),
 	}
 	err := orchestrator.StartSession(context.Background(), mock, params)
@@ -780,5 +784,30 @@ func TestStartSessionCACertMountedInClaude(t *testing.T) {
 	// Verify CopyFromContainer was called for proxy CA cert
 	if len(mock.CopiedFiles) == 0 {
 		t.Error("CopyFromContainer should have been called for CA cert")
+	}
+}
+
+func TestExtractVolumeSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+	mock := NewMockRuntime()
+	mock.readFromVolumeFunc = func(ctx context.Context, volumeName, filePath, dstPath string) error {
+		if filePath == "settings.json" {
+			return os.WriteFile(dstPath, []byte(`{"env":{}}`), 0644)
+		}
+		return os.ErrNotExist
+	}
+	dir, err := orchestrator.ExtractVolumeSettings(context.Background(), mock, "test-vol", tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatal("settings.json should have been extracted")
+	}
+	if string(data) != `{"env":{}}` {
+		t.Errorf("unexpected content: %s", string(data))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "settings.local.json")); !os.IsNotExist(err) {
+		t.Error("settings.local.json should not exist")
 	}
 }

@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/taeikkim92/airlock/internal/config"
@@ -12,13 +13,32 @@ import (
 
 // SessionParams holds everything needed to start an airlock session.
 type SessionParams struct {
-	ID          string
-	Workspace   string
-	ClaudeDir   string
-	Config      config.Config
-	TmpDir      string
-	ShadowMounts  []secrets.ShadowMount
-	MappingPath   string
+	ID           string
+	Workspace    string
+	VolumeName   string // Docker named volume for .claude state
+	ClaudeDir    string // Deprecated: bind mount fallback
+	Config       config.Config
+	TmpDir       string
+	ShadowMounts []secrets.ShadowMount
+	MappingPath  string
+}
+
+// ExtractVolumeSettings reads settings.json and settings.local.json from the
+// named Docker volume into a temporary directory and returns that directory's
+// path. Files that do not exist in the volume are silently skipped.
+func ExtractVolumeSettings(ctx context.Context, runtime container.ContainerRuntime, volumeName, tmpDir string) (string, error) {
+	dir := filepath.Join(tmpDir, "vol-settings")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("create vol-settings dir: %w", err)
+	}
+	for _, name := range []string{"settings.json", "settings.local.json"} {
+		dst := filepath.Join(dir, name)
+		err := runtime.ReadFromVolume(ctx, volumeName, name, dst)
+		if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("read %s from volume: %w", name, err)
+		}
+	}
+	return dir, nil
 }
 
 const (
@@ -30,6 +50,12 @@ const (
 // proxy CA certificate, and runs the Claude agent container in attached mode.
 func StartSession(ctx context.Context, runtime container.ContainerRuntime, params SessionParams) error {
 	cfg := params.Config
+
+	if params.VolumeName != "" {
+		if err := runtime.EnsureVolume(ctx, params.VolumeName); err != nil {
+			return fmt.Errorf("ensure volume: %w", err)
+		}
+	}
 
 	fmt.Println("Creating airlock network...")
 	netOpts := container.NetworkConfig(cfg.NetworkName)
@@ -46,6 +72,7 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 		NetworkName:      cfg.NetworkName,
 		ShadowMounts:     params.ShadowMounts,
 		MappingPath:      params.MappingPath,
+		VolumeName:       params.VolumeName,
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
@@ -93,6 +120,12 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntime, params SessionParams) error {
 	cfg := params.Config
 
+	if params.VolumeName != "" {
+		if err := runtime.EnsureVolume(ctx, params.VolumeName); err != nil {
+			return fmt.Errorf("ensure volume: %w", err)
+		}
+	}
+
 	networkName := cfg.NetworkName
 	if params.ID != "" {
 		networkName = networkName + "-" + params.ID
@@ -112,6 +145,7 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 		NetworkName:      networkName,
 		ShadowMounts:     params.ShadowMounts,
 		MappingPath:      params.MappingPath,
+		VolumeName:       params.VolumeName,
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
