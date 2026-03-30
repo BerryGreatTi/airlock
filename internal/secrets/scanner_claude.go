@@ -23,12 +23,24 @@ func NewClaudeScanner() *ClaudeScanner {
 func (s *ClaudeScanner) Name() string { return "claude" }
 
 func (s *ClaudeScanner) Scan(opts ScanOpts) (*ScanResult, error) {
-	files := []claudeSettingsFile{
-		{filepath.Join(opts.HomeDir, ".claude", "settings.json"), "/home/airlock/.claude/settings.json"},
-		{filepath.Join(opts.HomeDir, ".claude", "settings.local.json"), "/home/airlock/.claude/settings.local.json"},
-		{filepath.Join(opts.Workspace, ".claude", "settings.json"), "/workspace/.claude/settings.json"},
-		{filepath.Join(opts.Workspace, ".claude", "settings.local.json"), "/workspace/.claude/settings.local.json"},
+	var files []claudeSettingsFile
+
+	if opts.VolumeSettingsDir != "" {
+		files = append(files,
+			claudeSettingsFile{filepath.Join(opts.VolumeSettingsDir, "settings.json"), "/home/airlock/.claude/settings.json"},
+			claudeSettingsFile{filepath.Join(opts.VolumeSettingsDir, "settings.local.json"), "/home/airlock/.claude/settings.local.json"},
+		)
+	} else {
+		files = append(files,
+			claudeSettingsFile{filepath.Join(opts.HomeDir, ".claude", "settings.json"), "/home/airlock/.claude/settings.json"},
+			claudeSettingsFile{filepath.Join(opts.HomeDir, ".claude", "settings.local.json"), "/home/airlock/.claude/settings.local.json"},
+		)
 	}
+
+	files = append(files,
+		claudeSettingsFile{filepath.Join(opts.Workspace, ".claude", "settings.json"), "/workspace/.claude/settings.json"},
+		claudeSettingsFile{filepath.Join(opts.Workspace, ".claude", "settings.local.json"), "/workspace/.claude/settings.local.json"},
+	)
 
 	result := &ScanResult{Mapping: make(map[string]string)}
 
