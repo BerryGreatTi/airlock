@@ -38,6 +38,38 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertNil(decoded.proxyId)
     }
 
+    func testOverrideFieldsDefaultToNil() {
+        let ws = Workspace(name: "test", path: "/tmp")
+        XCTAssertNil(ws.proxyImageOverride)
+        XCTAssertNil(ws.passthroughHostsOverride)
+        XCTAssertNil(ws.proxyPortOverride)
+    }
+
+    func testOverrideFieldsPersisted() throws {
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.proxyImageOverride = "custom-proxy:v2"
+        ws.passthroughHostsOverride = ["api.example.com"]
+        ws.proxyPortOverride = 9090
+        let data = try JSONEncoder().encode(ws)
+        let decoded = try JSONDecoder().decode(Workspace.self, from: data)
+        XCTAssertEqual(decoded.proxyImageOverride, "custom-proxy:v2")
+        XCTAssertEqual(decoded.passthroughHostsOverride, ["api.example.com"])
+        XCTAssertEqual(decoded.proxyPortOverride, 9090)
+    }
+
+    func testBackwardsCompatDecoding() throws {
+        // Simulate old workspaces.json without new fields
+        let json = """
+        {"id":"12345678-1234-1234-1234-123456789012","name":"old","path":"/tmp"}
+        """
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(Workspace.self, from: data)
+        XCTAssertEqual(decoded.name, "old")
+        XCTAssertNil(decoded.proxyImageOverride)
+        XCTAssertNil(decoded.passthroughHostsOverride)
+        XCTAssertNil(decoded.proxyPortOverride)
+    }
+
     func testTerminalSessionCreation() {
         let session = TerminalSession()
         XCTAssertTrue(session.isActive)

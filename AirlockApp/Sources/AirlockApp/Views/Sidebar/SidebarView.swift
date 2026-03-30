@@ -51,7 +51,7 @@ struct SidebarView: View {
                 .padding(.horizontal)
 
                 Button {
-                    appState.selectedTab = .settings
+                    NotificationCenter.default.post(name: .airlockOpenGlobalSettings, object: nil)
                 } label: {
                     Label("Settings", systemImage: "gear")
                         .frame(maxWidth: .infinity, alignment: .leading)

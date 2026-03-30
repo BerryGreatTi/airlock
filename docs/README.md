@@ -32,6 +32,7 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 | [ADR-0002](decisions/ADR-0002-agent-agnostic-security-layer.md) | Agent-agnostic security layer with Claude Code first | Accepted |
 | [ADR-0003](decisions/ADR-0003-open-source-positioning.md) | Open-source positioning as complementary security layer | Accepted |
 | [ADR-0004](decisions/ADR-0004-gui-primary-interface.md) | GUI as primary interface, CLI as engine | Accepted |
+| [ADR-0005](decisions/ADR-0005-settings-secret-protection.md) | Settings secret protection with modular Scanner pipeline | Accepted |
 
 ## Guides Index
 

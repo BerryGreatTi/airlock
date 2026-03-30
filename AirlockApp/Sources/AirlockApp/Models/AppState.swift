@@ -78,7 +78,10 @@ final class AppState {
         activationStates[workspace.id] = .activating
         lastError = nil
         do {
-            _ = try await service.activateAndWaitReady(workspace: workspace)
+            let store = WorkspaceStore()
+            let settings = (try? store.loadSettings()) ?? AppSettings()
+            let resolved = ResolvedSettings(global: settings, workspace: workspace)
+            _ = try await service.activateAndWaitReady(workspace: workspace, resolved: resolved)
             activationStates[workspace.id] = .active
             if let idx = workspaces.firstIndex(where: { $0.id == workspace.id }) {
                 workspaces[idx].isActive = true
@@ -105,5 +108,19 @@ struct AppSettings: Codable, Equatable {
     var airlockBinaryPath: String?
     var containerImage: String = "airlock-claude:latest"
     var proxyImage: String = "airlock-proxy:latest"
-    var passthroughHosts: [String] = ["api.anthropic.com", "auth.anthropic.com"]
+    var passthroughHosts: [String] = []
+}
+
+struct ResolvedSettings: Sendable {
+    let containerImage: String
+    let proxyImage: String
+    let passthroughHosts: [String]
+    let proxyPort: Int
+
+    init(global: AppSettings, workspace: Workspace) {
+        self.containerImage = workspace.containerImageOverride ?? global.containerImage
+        self.proxyImage = workspace.proxyImageOverride ?? global.proxyImage
+        self.passthroughHosts = workspace.passthroughHostsOverride ?? global.passthroughHosts
+        self.proxyPort = workspace.proxyPortOverride ?? 8080
+    }
 }
