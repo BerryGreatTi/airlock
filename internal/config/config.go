@@ -14,15 +14,17 @@ type Config struct {
 	NetworkName      string   `yaml:"network_name"`
 	ProxyPort        int      `yaml:"proxy_port"`
 	PassthroughHosts []string `yaml:"passthrough_hosts"`
+	VolumeName       string   `yaml:"volume_name"`
 }
 
 func Default() Config {
 	return Config{
-		ContainerImage: "airlock-claude:latest",
-		ProxyImage:     "airlock-proxy:latest",
-		NetworkName:    "airlock-net",
-		ProxyPort:      8080,
+		ContainerImage:   "airlock-claude:latest",
+		ProxyImage:       "airlock-proxy:latest",
+		NetworkName:      "airlock-net",
+		ProxyPort:        8080,
 		PassthroughHosts: []string{},
+		VolumeName:       "airlock-claude-home",
 	}
 }
 

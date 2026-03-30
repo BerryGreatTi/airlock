@@ -62,3 +62,41 @@ func TestLoadNonExistent(t *testing.T) {
 		t.Error("expected error loading non-existent config")
 	}
 }
+
+func TestConfigVolumeNameDefault(t *testing.T) {
+	cfg := config.Default()
+	if cfg.VolumeName != "airlock-claude-home" {
+		t.Errorf("expected default VolumeName airlock-claude-home, got %s", cfg.VolumeName)
+	}
+}
+
+func TestConfigVolumeNameRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.VolumeName = "custom-volume"
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.VolumeName != "custom-volume" {
+		t.Errorf("expected custom-volume, got %s", loaded.VolumeName)
+	}
+}
+
+func TestConfigVolumeNameBackwardsCompat(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.VolumeName != "" {
+		t.Errorf("expected empty VolumeName for old config, got %s", loaded.VolumeName)
+	}
+}
