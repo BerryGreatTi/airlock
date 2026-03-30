@@ -13,11 +13,15 @@
 | `make gui-build` | Build macOS SwiftUI app (requires macOS + Xcode) |
 | `make gui-test` | Run Swift tests |
 | `make gui-run` | Run the GUI app locally |
+| `airlock volume status` | Show persistent volume state |
+| `airlock volume reset --confirm` | Destroy and recreate the `.claude` volume |
+| `airlock config import` | Import host `~/.claude` into the airlock volume |
+| `airlock config export` | Export airlock volume to host directory |
 
 ## Architecture
 
 Two-container setup on a Docker bridge network:
-- **airlock-claude**: Runs the AI agent. Secrets exist only as `ENC[age:...]` ciphertext. No plaintext secrets anywhere in this container.
+- **airlock-claude**: Runs the AI agent. A Docker named volume (`airlock-claude-home`) provides persistent `~/.claude` state (OAuth, history, sessions). Secrets in settings files exist only as `ENC[age:...]` ciphertext via shadow mounts.
 - **airlock-proxy**: mitmproxy sidecar. Intercepts outbound HTTPS, replaces `ENC[age:...]` with decrypted values at the network boundary. Claude API traffic passes through untouched.
 
 The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management is behind a `ContainerRuntime` interface (`internal/container/runtime.go`) for testability.

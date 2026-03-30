@@ -17,12 +17,15 @@ Airlock assumes the host machine is trusted. The age private key resides on the 
 
 The agent runs inside a Docker container with minimal privileges:
 - `--cap-drop=ALL` removes all Linux capabilities
-- Only the workspace directory is mounted read-write
-- `~/.claude/` is mounted read-only (for authentication and settings)
-- Sensitive files (`.env`, `settings.json`) are shadow-mounted with encrypted versions, so the agent reads only `ENC[age:...]` ciphertext even when accessing them directly
+- The workspace directory is mounted read-write at `/workspace`
+- `~/.claude/` state is stored in a persistent Docker named volume (`airlock-claude-home`) mounted read-write at `/home/airlock/.claude`. This enables OAuth persistence, session history, and cross-workspace context. The volume is independent from the host's `~/.claude` (see [ADR-0006](../decisions/ADR-0006-writable-claude-volume.md)).
+- Sensitive files (`.env`, `settings.json`) are shadow-mounted with encrypted versions. Shadow mounts (file-level bind mounts) take precedence over the volume mount, so the agent reads only `ENC[age:...]` ciphertext at those specific paths even though the underlying volume is writable.
 - No direct network access (internal Docker network)
+- The `airlock` container user runs as UID 1001 / GID 1001, explicitly pinned in the Dockerfile for volume ownership consistency.
 
-**Blast radius:** Even in the worst case, damage is limited to the mounted workspace directory.
+**Blast radius:** Damage is limited to the mounted workspace directory and the persistent `.claude` volume. The volume stores only Claude Code state (history, sessions, OAuth tokens) -- no host filesystem access beyond the workspace.
+
+**Shadow mount security on writable volume:** Shadow mounts only overlay the specific files that were scanned for secrets (`settings.json`, `settings.local.json`). Other files written to the volume by the agent (e.g., session data, history) are not shadowed. See [glossary/shadow-mount](../glossary/shadow-mount.md) for details.
 
 ### Layer 2: Secret Encryption
 
