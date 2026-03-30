@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/taeikkim92/airlock/internal/config"
+	"github.com/taeikkim92/airlock/internal/container"
 	"github.com/taeikkim92/airlock/internal/crypto"
 )
 
@@ -41,8 +43,22 @@ func RunInit(airlockDir string) error {
 	fmt.Println("Initialized .airlock/")
 	fmt.Printf("  Public key: %s\n", kp.PublicKey)
 	fmt.Println("  Config:     .airlock/config.yaml")
+
+	// Create persistent volume for Claude Code state
+	docker, dockerErr := container.NewDocker()
+	if dockerErr == nil {
+		defer docker.Close()
+		ctx := context.Background()
+		if err := docker.EnsureVolume(ctx, cfg.VolumeName); err != nil {
+			fmt.Printf("Warning: could not create volume %s: %v\n", cfg.VolumeName, err)
+		} else {
+			fmt.Printf("  Volume:    %s\n", cfg.VolumeName)
+		}
+	}
+
 	fmt.Println()
 	fmt.Println("Add .airlock/keys/ to .gitignore")
+	fmt.Println("Run 'airlock config import' to import your host Claude Code settings.")
 
 	return nil
 }
