@@ -70,7 +70,10 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 	if volumeName == "" {
 		volumeName = "airlock-claude-home"
 	}
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("determine home directory: %w", err)
+	}
 
 	tmpDir, err := os.MkdirTemp("", "airlock-"+id+"-*")
 	if err != nil {

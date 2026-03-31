@@ -99,7 +99,9 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 	if err != nil {
 		return fmt.Errorf("start proxy: %w", err)
 	}
-	runtime.ConnectNetwork(ctx, "bridge", proxyID)
+	if err := runtime.ConnectNetwork(ctx, "bridge", proxyID); err != nil {
+		return fmt.Errorf("connect proxy to bridge: %w", err)
+	}
 
 	proxyContainerName := "airlock-proxy"
 	if params.ID != "" {
@@ -171,7 +173,9 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 	if err != nil {
 		return fmt.Errorf("start proxy: %w", err)
 	}
-	runtime.ConnectNetwork(ctx, "bridge", proxyID)
+	if err := runtime.ConnectNetwork(ctx, "bridge", proxyID); err != nil {
+		return fmt.Errorf("connect proxy to bridge: %w", err)
+	}
 
 	proxyContainerName := "airlock-proxy"
 	if params.ID != "" {
