@@ -76,7 +76,7 @@ struct GlobalSettingsSheet: View {
             }
             .padding()
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 500, height: 540)
         .onAppear { load() }
         .sheet(isPresented: $showImportSheet) {
             ImportConfigSheet()

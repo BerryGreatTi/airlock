@@ -56,12 +56,23 @@ struct ImportConfigSheet: View {
             }
 
             HStack {
+                if isImporting {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Importing...")
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Import") { performImport() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isImporting || selectedItems.isEmpty)
+                if result != nil {
+                    Button("Done") { dismiss() }
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Cancel") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Import") { performImport() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(isImporting || selectedItems.isEmpty)
+                }
             }
             .padding()
         }
