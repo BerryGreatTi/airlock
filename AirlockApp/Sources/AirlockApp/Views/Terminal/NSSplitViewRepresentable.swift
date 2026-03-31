@@ -5,10 +5,11 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
     let paneIDs: [UUID]
     let isVertical: Bool
     let containerName: String
+    let workDir: String
     let onPaneTerminated: (UUID) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(containerName: containerName, onPaneTerminated: onPaneTerminated)
+        Coordinator(containerName: containerName, workDir: workDir, onPaneTerminated: onPaneTerminated)
     }
 
     func makeNSView(context: Context) -> NSSplitView {
@@ -74,10 +75,12 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
         var delegates: [UUID: PaneDelegate] = [:]
         var currentPaneIDs: [UUID] = []
         let containerName: String
+        let workDir: String
         var onPaneTerminated: (UUID) -> Void
 
-        init(containerName: String, onPaneTerminated: @escaping (UUID) -> Void) {
+        init(containerName: String, workDir: String, onPaneTerminated: @escaping (UUID) -> Void) {
             self.containerName = containerName
+            self.workDir = workDir
             self.onPaneTerminated = onPaneTerminated
         }
 
@@ -97,7 +100,8 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
 
         func startTerminal(_ terminal: AirlockTerminalView) {
             let escaped = AirlockTerminalView.shellEscape(containerName)
-            let cmd = "docker exec -it \(escaped) /bin/bash"
+            let escapedWorkDir = AirlockTerminalView.shellEscape(workDir)
+            let cmd = "docker exec -it -w \(escapedWorkDir) \(escaped) /bin/bash"
             let env = CLIService.enrichedEnvironment().map { "\($0.key)=\($0.value)" }
             terminal.startAfterLayout(cmd: cmd, env: env)
         }

@@ -78,7 +78,7 @@ struct ContentView: View {
             Group {
                 switch appState.activationState(for: workspace) {
                 case .active:
-                    TerminalSplitView(containerName: workspace.containerName, action: $terminalAction)
+                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, action: $terminalAction)
                 case .activating:
                     VStack(spacing: 16) {
                         ProgressView()
