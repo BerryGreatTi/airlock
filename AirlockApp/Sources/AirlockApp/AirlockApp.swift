@@ -46,6 +46,7 @@ extension FocusedValues {
 
 @main
 struct AirlockApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @FocusedValue(\.appState) private var appState
     @FocusedValue(\.containerService) private var containerService
     @FocusedValue(\.terminalAction) private var terminalAction
@@ -58,6 +59,7 @@ struct AirlockApp: App {
                 .onAppear {
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
+                    NSApp.applicationIconImage = AirlockIconView.makeNSImage()
                 }
         }
         .defaultSize(width: 1200, height: 700)

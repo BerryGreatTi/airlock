@@ -36,18 +36,20 @@ struct TerminalSplitView: View {
             .disabled(panes.count >= maxPanes)
 
             Button {
+                if panes.count < maxPanes { addPane() }
                 splitVertical = true
             } label: {
                 Label("Split Vertical", systemImage: "rectangle.split.1x2")
             }
-            .disabled(panes.count < 2)
+            .disabled(panes.count >= maxPanes && splitVertical)
 
             Button {
+                if panes.count < maxPanes { addPane() }
                 splitVertical = false
             } label: {
                 Label("Split Horizontal", systemImage: "rectangle.split.2x1")
             }
-            .disabled(panes.count < 2)
+            .disabled(panes.count >= maxPanes && !splitVertical)
 
             Divider().frame(height: 16)
 
