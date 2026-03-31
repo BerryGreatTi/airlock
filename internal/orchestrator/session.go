@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/taeikkim92/airlock/internal/config"
 	"github.com/taeikkim92/airlock/internal/container"
@@ -44,8 +45,21 @@ func ExtractVolumeSettings(ctx context.Context, runtime container.ContainerRunti
 
 const (
 	mitmproxyCAPath  = "/root/.mitmproxy/mitmproxy-ca-cert.pem"
-	maxCAWaitRetries = 15
+	maxCAWaitRetries = 30
 )
+
+// copyWithRetry retries CopyFromContainer on transient failures.
+func copyWithRetry(ctx context.Context, runtime container.ContainerRuntime, containerName, srcPath, dstPath string, maxAttempts int) error {
+	var lastErr error
+	for i := 0; i < maxAttempts; i++ {
+		lastErr = runtime.CopyFromContainer(ctx, containerName, srcPath, dstPath)
+		if lastErr == nil {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return lastErr
+}
 
 // StartSession creates the network, starts the proxy sidecar, extracts the
 // proxy CA certificate, and runs the Claude agent container in attached mode.
@@ -98,7 +112,7 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 	}
 
 	caCertDst := filepath.Join(params.TmpDir, "mitmproxy-ca-cert.pem")
-	if err := runtime.CopyFromContainer(ctx, proxyContainerName, mitmproxyCAPath, caCertDst); err != nil {
+	if err := copyWithRetry(ctx, runtime, proxyContainerName, mitmproxyCAPath, caCertDst, 3); err != nil {
 		return fmt.Errorf("extract proxy CA cert: %w", err)
 	}
 	opts.CACertPath = caCertDst
@@ -169,7 +183,7 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 	}
 
 	caCertDst := filepath.Join(params.TmpDir, "mitmproxy-ca-cert.pem")
-	if err := runtime.CopyFromContainer(ctx, proxyContainerName, mitmproxyCAPath, caCertDst); err != nil {
+	if err := copyWithRetry(ctx, runtime, proxyContainerName, mitmproxyCAPath, caCertDst, 3); err != nil {
 		return fmt.Errorf("extract proxy CA cert: %w", err)
 	}
 	opts.CACertPath = caCertDst
