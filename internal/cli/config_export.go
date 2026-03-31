@@ -22,14 +22,16 @@ var configExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export airlock volume config to a host directory",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		airlockDir := ".airlock"
-		cfg, err := config.Load(airlockDir)
-		if err != nil {
-			return fmt.Errorf("load config: %w", err)
+		volumeName := "airlock-claude-home"
+		if cfg, err := config.Load(".airlock"); err == nil && cfg.VolumeName != "" {
+			volumeName = cfg.VolumeName
 		}
-		volumeName := cfg.VolumeName
-		if volumeName == "" {
-			volumeName = "airlock-claude-home"
+		var containerImage string
+		if cfg, err := config.Load(".airlock"); err == nil {
+			containerImage = cfg.ContainerImage
+		}
+		if containerImage == "" {
+			containerImage = "airlock-claude:latest"
 		}
 		dstDir := exportTo
 		if dstDir == "" {
@@ -66,7 +68,7 @@ var configExportCmd = &cobra.Command{
 		}
 		script := strings.Join(cpParts, " ; ")
 		exportCfg := container.ContainerConfig{
-			Image: cfg.ContainerImage,
+			Image: containerImage,
 			Name:  "airlock-exporter",
 			User:  "root",
 			Binds: []string{

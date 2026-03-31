@@ -43,14 +43,16 @@ settings.json, settings.local.json.
 
 Existing files in the volume are skipped unless --force is set.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		airlockDir := ".airlock"
-		cfg, err := config.Load(airlockDir)
-		if err != nil {
-			return fmt.Errorf("load config (run 'airlock init' first): %w", err)
+		volumeName := "airlock-claude-home"
+		if cfg, err := config.Load(".airlock"); err == nil && cfg.VolumeName != "" {
+			volumeName = cfg.VolumeName
 		}
-		volumeName := cfg.VolumeName
-		if volumeName == "" {
-			volumeName = "airlock-claude-home"
+		var containerImage string
+		if cfg, err := config.Load(".airlock"); err == nil {
+			containerImage = cfg.ContainerImage
+		}
+		if containerImage == "" {
+			containerImage = "airlock-claude:latest"
 		}
 		srcDir := importFrom
 		if srcDir == "" {
@@ -102,7 +104,7 @@ Existing files in the volume are skipped unless --force is set.`,
 		// chown volume root to airlock user, then copy, then chown results
 		fullScript := "chown 1001:1001 /dst ; " + script + " ; chown -R 1001:1001 /dst"
 		importCfg := container.ContainerConfig{
-			Image: cfg.ContainerImage,
+			Image: containerImage,
 			Name:  "airlock-importer",
 			User:  "root",
 			Binds: []string{
