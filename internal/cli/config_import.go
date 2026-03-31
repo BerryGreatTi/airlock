@@ -99,15 +99,17 @@ Existing files in the volume are skipped unless --force is set.`,
 			cpParts = append(cpParts, check)
 		}
 		script := strings.Join(cpParts, " ; ")
+		// chown volume root to airlock user, then copy, then chown results
+		fullScript := "chown 1001:1001 /dst ; " + script + " ; chown -R 1001:1001 /dst"
 		importCfg := container.ContainerConfig{
 			Image: cfg.ContainerImage,
 			Name:  "airlock-importer",
+			User:  "root",
 			Binds: []string{
 				fmt.Sprintf("%s:/src:ro", srcDir),
 				fmt.Sprintf("%s:/dst", volumeName),
 			},
-			CapDrop: []string{"ALL"},
-			Cmd:     []string{"sh", "-c", script},
+			Cmd: []string{"sh", "-c", fullScript},
 		}
 		fmt.Printf("Importing from %s into volume %s...\n", srcDir, volumeName)
 		if err := docker.RunAttached(ctx, importCfg); err != nil {

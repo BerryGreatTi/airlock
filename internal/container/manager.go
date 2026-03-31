@@ -51,6 +51,7 @@ type ContainerConfig struct {
 	Network    string
 	CapDrop    []string
 	WorkingDir string
+	User       string
 	Tty        bool
 	Stdin      bool
 	Cmd        []string

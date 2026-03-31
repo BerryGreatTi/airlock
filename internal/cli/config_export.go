@@ -68,12 +68,12 @@ var configExportCmd = &cobra.Command{
 		exportCfg := container.ContainerConfig{
 			Image: cfg.ContainerImage,
 			Name:  "airlock-exporter",
+			User:  "root",
 			Binds: []string{
 				fmt.Sprintf("%s:/src:ro", volumeName),
 				fmt.Sprintf("%s:/dst", dstDir),
 			},
-			CapDrop: []string{"ALL"},
-			Cmd:     []string{"sh", "-c", script},
+			Cmd: []string{"sh", "-c", script},
 		}
 		fmt.Printf("Exporting from volume %s to %s...\n", volumeName, dstDir)
 		if err := docker.RunAttached(ctx, exportCfg); err != nil {
