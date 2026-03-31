@@ -111,6 +111,7 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 			if extractErr != nil {
 				return fmt.Errorf("extract volume settings: %w", extractErr)
 			}
+			wsName := filepath.Base(workspace)
 			scanResult, err := secrets.ScanAll(scanners, secrets.ScanOpts{
 				Workspace:         workspace,
 				HomeDir:           homeDir,
@@ -118,6 +119,7 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 				PrivateKey:        kp.PrivateKey,
 				TmpDir:            tmpDir,
 				VolumeSettingsDir: volSettingsDir,
+				ContainerWorkDir:  fmt.Sprintf("/workspace/%s", wsName),
 			})
 			if err != nil {
 				return fmt.Errorf("scan secrets: %w", err)

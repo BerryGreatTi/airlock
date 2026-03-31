@@ -10,12 +10,13 @@ type Scanner interface {
 
 // ScanOpts holds parameters shared by all scanners.
 type ScanOpts struct {
-	Workspace         string
-	HomeDir           string
-	PublicKey         string
-	PrivateKey        string
-	TmpDir            string
-	VolumeSettingsDir string // when set, read global settings from this dir instead of HomeDir
+	Workspace            string
+	HomeDir              string
+	PublicKey            string
+	PrivateKey           string
+	TmpDir               string
+	VolumeSettingsDir    string // when set, read global settings from this dir instead of HomeDir
+	ContainerWorkDir     string // container-side workspace path (e.g., /workspace/my-app)
 }
 
 // ShadowMount describes a file-level Docker bind mount that shadows

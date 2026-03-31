@@ -2,6 +2,7 @@ package container
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -15,6 +16,7 @@ var dockerNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 type RunOpts struct {
 	ID               string
 	Workspace        string
+	WorkspaceName    string // basename for container path; derived from Workspace if empty
 	Image            string
 	ProxyImage       string
 	NetworkName      string
@@ -104,8 +106,14 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 	}
 	proxyURL := fmt.Sprintf("http://%s:%d", proxyName, opts.ProxyPort)
 
+	wsName := opts.WorkspaceName
+	if wsName == "" {
+		wsName = filepath.Base(opts.Workspace)
+	}
+	containerWorkDir := fmt.Sprintf("/workspace/%s", wsName)
+
 	binds := []string{
-		fmt.Sprintf("%s:/workspace", opts.Workspace),
+		fmt.Sprintf("%s:%s", opts.Workspace, containerWorkDir),
 	}
 
 	var mounts []mount.Mount
@@ -130,7 +138,7 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 		Image:      opts.Image,
 		Name:       claudeName,
 		Network:    opts.NetworkName,
-		WorkingDir: "/workspace",
+		WorkingDir: containerWorkDir,
 		Tty:        true,
 		Stdin:      true,
 		Binds:      binds,

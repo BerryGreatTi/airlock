@@ -126,7 +126,7 @@ func TestBuildClaudeConfigAllBindMounts(t *testing.T) {
 
 	// Verify bind mounts present with correct paths and modes
 	expectations := map[string]string{
-		"/workspace": "/home/user/project:/workspace",
+		"/workspace/": "/home/user/project:/workspace/",
 		"env.enc:ro": "env.enc:ro",
 		"ca-cert:ro": "ca-certificates/airlock-proxy.crt:ro",
 	}
@@ -226,8 +226,8 @@ func TestBuildClaudeConfigSecurityDefaults(t *testing.T) {
 	}
 
 	// WorkingDir
-	if cfg.WorkingDir != "/workspace" {
-		t.Errorf("WorkingDir should be /workspace, got %s", cfg.WorkingDir)
+	if !strings.HasPrefix(cfg.WorkingDir, "/workspace/") {
+		t.Errorf("WorkingDir should start with /workspace/, got %s", cfg.WorkingDir)
 	}
 
 	// Name
@@ -384,7 +384,7 @@ func TestBuildClaudeDetachedConfig(t *testing.T) {
 	if cfg.Image != "airlock-claude:latest" {
 		t.Errorf("expected image airlock-claude:latest, got %s", cfg.Image)
 	}
-	if cfg.WorkingDir != "/workspace" {
+	if !strings.HasPrefix(cfg.WorkingDir, "/workspace/") {
 		t.Errorf("expected working dir /workspace, got %s", cfg.WorkingDir)
 	}
 	if len(cfg.CapDrop) != 1 || cfg.CapDrop[0] != "ALL" {

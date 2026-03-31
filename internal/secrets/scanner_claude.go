@@ -37,9 +37,13 @@ func (s *ClaudeScanner) Scan(opts ScanOpts) (*ScanResult, error) {
 		)
 	}
 
+	containerWorkDir := opts.ContainerWorkDir
+	if containerWorkDir == "" {
+		containerWorkDir = "/workspace"
+	}
 	files = append(files,
-		claudeSettingsFile{filepath.Join(opts.Workspace, ".claude", "settings.json"), "/workspace/.claude/settings.json"},
-		claudeSettingsFile{filepath.Join(opts.Workspace, ".claude", "settings.local.json"), "/workspace/.claude/settings.local.json"},
+		claudeSettingsFile{filepath.Join(opts.Workspace, ".claude", "settings.json"), containerWorkDir + "/.claude/settings.json"},
+		claudeSettingsFile{filepath.Join(opts.Workspace, ".claude", "settings.local.json"), containerWorkDir + "/.claude/settings.local.json"},
 	)
 
 	result := &ScanResult{Mapping: make(map[string]string)}
