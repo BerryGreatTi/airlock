@@ -19,14 +19,10 @@ var volumeStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show volume status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		airlockDir := ".airlock"
-		cfg, err := config.Load(airlockDir)
-		if err != nil {
-			return fmt.Errorf("load config (run 'airlock init' first): %w", err)
-		}
-		volumeName := cfg.VolumeName
-		if volumeName == "" {
-			volumeName = "airlock-claude-home"
+		// Try loading config for custom volume name; fall back to default
+		volumeName := "airlock-claude-home"
+		if cfg, err := config.Load(".airlock"); err == nil && cfg.VolumeName != "" {
+			volumeName = cfg.VolumeName
 		}
 		docker, err := container.NewDocker()
 		if err != nil {
