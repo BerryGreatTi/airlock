@@ -150,14 +150,17 @@ struct GlobalSettingsSheet: View {
             .filter { !$0.isEmpty }
 
         let store = WorkspaceStore()
-        try? store.saveSettings(settings)
-        appState.settings = settings
-
-        withAnimation { saved = true }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1))
-            saved = false
-            dismiss()
+        do {
+            try store.saveSettings(settings)
+            appState.settings = settings
+            withAnimation { saved = true }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                saved = false
+                dismiss()
+            }
+        } catch {
+            appState.lastError = "Failed to save settings: \(error.localizedDescription)"
         }
     }
 

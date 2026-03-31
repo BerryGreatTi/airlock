@@ -10,6 +10,14 @@ struct ContentView: View {
     @State private var showingGlobalSettings = false
     @Environment(\.colorScheme) private var colorScheme
 
+    private var isDarkTerminal: Bool {
+        switch appState.settings.theme {
+        case .dark: return true
+        case .light: return false
+        case .system: return colorScheme == .dark
+        }
+    }
+
     var body: some View {
         NavigationSplitView {
             SidebarView(appState: appState)
@@ -79,7 +87,7 @@ struct ContentView: View {
             Group {
                 switch appState.activationState(for: workspace) {
                 case .active:
-                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, terminalSettings: appState.settings.terminal, terminalColors: TerminalColors.forDarkMode(colorScheme == .dark), action: $terminalAction)
+                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, terminalSettings: appState.settings.terminal, terminalColors: TerminalColors.forDarkMode(isDarkTerminal), action: $terminalAction)
                 case .activating:
                     VStack(spacing: 16) {
                         ProgressView()

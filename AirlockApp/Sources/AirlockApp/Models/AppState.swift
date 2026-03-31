@@ -79,9 +79,7 @@ final class AppState {
         activationStates[workspace.id] = .activating
         lastError = nil
         do {
-            let store = WorkspaceStore()
-            let settings = (try? store.loadSettings()) ?? AppSettings()
-            let resolved = ResolvedSettings(global: settings, workspace: workspace)
+            let resolved = ResolvedSettings(global: self.settings, workspace: workspace)
             _ = try await service.activateAndWaitReady(workspace: workspace, resolved: resolved)
             activationStates[workspace.id] = .active
             if let idx = workspaces.firstIndex(where: { $0.id == workspace.id }) {
@@ -122,6 +120,14 @@ enum AppTheme: String, Codable, CaseIterable {
 struct TerminalSettings: Codable, Equatable {
     var fontName: String = "SF Mono"
     var fontSize: Double = 13
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fontName = try container.decodeIfPresent(String.self, forKey: .fontName) ?? "SF Mono"
+        fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize) ?? 13
+    }
 
     static let availableFonts: [String] = [
         "SF Mono",

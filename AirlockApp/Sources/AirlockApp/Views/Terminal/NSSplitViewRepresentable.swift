@@ -144,7 +144,6 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
             terminal.caretTextColor = c.caretText
             terminal.selectedTextBackgroundColor = c.selection
             terminal.useBrightColors = c.useBrightColors
-            terminal.configureNativeColors()
         }
 
         func applyColorsToAll() {
