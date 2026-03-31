@@ -6,10 +6,12 @@ Shadow mounts are the mechanism that connects the Scanner pipeline (which discov
 
 ```
 Host tmpdir:                    Container sees:
-/tmp/airlock-xxx/settings.json  ->  /home/airlock/.claude/settings.json  (encrypted)
-/tmp/airlock-xxx/proj-settings  ->  /workspace/.claude/settings.json     (encrypted)
-/tmp/airlock-xxx/env.enc        ->  /workspace/.env                      (encrypted)
+/tmp/airlock-xxx/settings.json  ->  /home/airlock/.claude/settings.json       (encrypted)
+/tmp/airlock-xxx/proj-settings  ->  /workspace/my-app/.claude/settings.json   (encrypted)
+/tmp/airlock-xxx/env.enc        ->  /workspace/my-app/.env                    (encrypted)
 ```
+
+Container workspace paths use the project directory basename (e.g., `/workspace/my-app`), so shadow mounts target the correct per-project paths.
 
 Key properties:
 

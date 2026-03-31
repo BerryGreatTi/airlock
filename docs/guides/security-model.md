@@ -17,7 +17,7 @@ Airlock assumes the host machine is trusted. The age private key resides on the 
 
 The agent runs inside a Docker container with minimal privileges:
 - `--cap-drop=ALL` removes all Linux capabilities
-- The workspace directory is mounted read-write at `/workspace`
+- Each workspace directory is mounted read-write at `/workspace/<project-name>` (using the directory basename). This gives each workspace a distinct path inside the container, so Claude Code maintains separate project histories in the shared volume.
 - `~/.claude/` state is stored in a persistent Docker named volume (`airlock-claude-home`) mounted read-write at `/home/airlock/.claude`. This enables OAuth persistence, session history, and cross-workspace context. The volume is independent from the host's `~/.claude` (see [ADR-0006](../decisions/ADR-0006-writable-claude-volume.md)).
 - Sensitive files (`.env`, `settings.json`) are shadow-mounted with encrypted versions. Shadow mounts (file-level bind mounts) take precedence over the volume mount, so the agent reads only `ENC[age:...]` ciphertext at those specific paths even though the underlying volume is writable.
 - No direct network access (internal Docker network)

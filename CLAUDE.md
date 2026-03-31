@@ -45,6 +45,9 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - SwiftTerm's `startProcess` has no `currentDirectory` parameter -- the GUI uses `bash -c "cd <path> && exec airlock run"` as a workaround
 - SwiftTerm delegate methods use `SwiftTerm.TerminalView` (not `LocalProcessTerminalView`) as the `source` parameter type for `hostCurrentDirectoryUpdate` and `processTerminated`
 - GUI builds require macOS 14+ -- CI runs on `macos-14` GitHub Actions runner
+- Docker named volume `airlock-claude-home` is created as root-owned. Import/export containers run as `root` and `chown 1001:1001` after copy. The `ContainerConfig.User` field controls this.
+- Claude Code stores auth in two files: `~/.claude/.credentials.json` (token) and `~/.claude.json` (session metadata). The entrypoint symlinks `~/.claude.json` into the volume so both persist.
+- Workspaces mount at `/workspace/<basename>` (not `/workspace`). The GUI passes `docker exec -w /workspace/<basename>` to open the terminal at the correct path.
 
 ## Documentation
 
