@@ -18,6 +18,7 @@ private struct EnvEntry: Identifiable {
     let id: UUID = UUID()
     var key: String
     var value: String
+    var source: String = ".env"
 
     var status: SecretStatus {
         if value.hasPrefix("ENC[age:") { return .encrypted }
@@ -38,11 +39,16 @@ struct SecretsView: View {
     let workspace: Workspace
     @Bindable var appState: AppState
     @State private var entries: [EnvEntry] = []
+    @State private var settingsEntries: [EnvEntry] = []
     @State private var rawLines: [String] = []
     @State private var errorMessage: String?
     @State private var showingAddEntry = false
     @State private var newKey = ""
     @State private var newValue = ""
+
+    private var allEntries: [EnvEntry] {
+        entries + settingsEntries
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,12 +56,13 @@ struct SecretsView: View {
                 restartBanner
             }
 
-            if let envFile = workspace.envFilePath {
-                secretsTable
-                    .task { loadEnvFile(envFile) }
-            } else {
-                noEnvFileView
-            }
+            secretsTable
+                .task {
+                    if let envFile = workspace.envFilePath {
+                        loadEnvFile(envFile)
+                    }
+                    loadSettingsSecrets()
+                }
         }
     }
 
@@ -80,12 +87,19 @@ struct SecretsView: View {
                 ContentUnavailableView {
                     Label("Error", systemImage: "exclamationmark.triangle")
                 } description: { Text(error) }
-            } else if entries.isEmpty {
+            } else if allEntries.isEmpty {
                 ContentUnavailableView {
-                    Label("No Entries", systemImage: "key")
-                } description: { Text("No entries found in .env file") }
+                    Label("No Secrets", systemImage: "key")
+                } description: { Text("No secrets found in .env or settings files") }
             } else {
-                Table(entries) {
+                Table(allEntries) {
+                    TableColumn("Source") { entry in
+                        Text(entry.source)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .width(min: 60, ideal: 80)
+
                     TableColumn("Name") { entry in
                         Text(entry.key).fontDesign(.monospaced)
                     }
@@ -143,9 +157,9 @@ struct SecretsView: View {
 
     private var summaryBar: some View {
         HStack {
-            let encrypted = entries.filter { $0.status == .encrypted }.count
-            let plaintext = entries.filter { $0.status == .plaintext }.count
-            Text("\(entries.count) entries")
+            let encrypted = allEntries.filter { $0.status == .encrypted }.count
+            let plaintext = allEntries.filter { $0.status == .plaintext }.count
+            Text("\(allEntries.count) entries")
             Text("\(encrypted) encrypted")
                 .foregroundStyle(.green)
             if plaintext > 0 {
@@ -185,12 +199,45 @@ struct SecretsView: View {
         .frame(width: 400)
     }
 
-    private var noEnvFileView: some View {
-        ContentUnavailableView {
-            Label("No .env File", systemImage: "doc.text")
-        } description: {
-            Text("Configure a .env file in workspace settings to manage secrets")
+    private func loadSettingsSecrets() {
+        let settingsFiles: [(path: String, label: String)] = [
+            (workspace.path + "/.claude/settings.json", "project"),
+            (workspace.path + "/.claude/settings.local.json", "project"),
+        ]
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let globalFiles: [(path: String, label: String)] = [
+            (home + "/.claude/settings.json", "global"),
+            (home + "/.claude/settings.local.json", "global"),
+        ]
+
+        var results: [EnvEntry] = []
+        for file in settingsFiles + globalFiles {
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: file.path)),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                continue
+            }
+            let fileName = (file.path as NSString).lastPathComponent
+            let source = "\(file.label) \(fileName)"
+
+            // Top-level env block
+            if let envBlock = json["env"] as? [String: String] {
+                for (key, value) in envBlock {
+                    results.append(EnvEntry(key: key, value: value, source: source))
+                }
+            }
+            // Per-MCP-server env blocks
+            if let mcpServers = json["mcpServers"] as? [String: Any] {
+                for (serverName, serverVal) in mcpServers {
+                    if let server = serverVal as? [String: Any],
+                       let envBlock = server["env"] as? [String: String] {
+                        for (key, value) in envBlock {
+                            results.append(EnvEntry(key: key, value: value, source: "mcp:\(serverName)"))
+                        }
+                    }
+                }
+            }
         }
+        settingsEntries = results
     }
 
     private func loadEnvFile(_ path: String) {
