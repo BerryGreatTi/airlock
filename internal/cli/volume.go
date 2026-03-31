@@ -30,12 +30,16 @@ var volumeStatusCmd = &cobra.Command{
 		}
 		defer docker.Close()
 		ctx := context.Background()
-		err = docker.EnsureVolume(ctx, volumeName)
+		exists, err := docker.VolumeExists(ctx, volumeName)
 		if err != nil {
-			fmt.Printf("Volume: %s (not available: %v)\n", volumeName, err)
+			fmt.Printf("Volume: %s (error: %v)\n", volumeName, err)
 			return nil
 		}
-		fmt.Printf("Volume: %s (ready)\n", volumeName)
+		if exists {
+			fmt.Printf("Volume: %s (ready)\n", volumeName)
+		} else {
+			fmt.Printf("Volume: %s (not created)\n", volumeName)
+		}
 		return nil
 	},
 }

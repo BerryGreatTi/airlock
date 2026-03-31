@@ -110,6 +110,9 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 	if wsName == "" {
 		wsName = filepath.Base(opts.Workspace)
 	}
+	if wsName == "" || wsName == "." || wsName == ".." || strings.ContainsAny(wsName, "/\\") {
+		wsName = "workspace"
+	}
 	containerWorkDir := fmt.Sprintf("/workspace/%s", wsName)
 
 	binds := []string{

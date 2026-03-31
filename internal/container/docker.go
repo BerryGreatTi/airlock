@@ -281,6 +281,18 @@ func (d *Docker) RemoveVolume(ctx context.Context, name string) error {
 	return d.client.VolumeRemove(ctx, name, true)
 }
 
+// VolumeExists returns true if the named volume exists, false if it does not.
+func (d *Docker) VolumeExists(ctx context.Context, name string) (bool, error) {
+	_, err := d.client.VolumeInspect(ctx, name)
+	if err == nil {
+		return true, nil
+	}
+	if errdefs.IsNotFound(err) {
+		return false, nil
+	}
+	return false, fmt.Errorf("inspect volume %s: %w", name, err)
+}
+
 // ReadFromVolume mounts the named volume into a temporary container and copies
 // filePath out to dstPath on the host. Returns os.ErrNotExist if the file is
 // not present in the volume.

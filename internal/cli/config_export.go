@@ -23,19 +23,21 @@ var configExportCmd = &cobra.Command{
 	Short: "Export airlock volume config to a host directory",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		volumeName := "airlock-claude-home"
-		if cfg, err := config.Load(".airlock"); err == nil && cfg.VolumeName != "" {
-			volumeName = cfg.VolumeName
-		}
-		var containerImage string
+		containerImage := "airlock-claude:latest"
 		if cfg, err := config.Load(".airlock"); err == nil {
-			containerImage = cfg.ContainerImage
-		}
-		if containerImage == "" {
-			containerImage = "airlock-claude:latest"
+			if cfg.VolumeName != "" {
+				volumeName = cfg.VolumeName
+			}
+			if cfg.ContainerImage != "" {
+				containerImage = cfg.ContainerImage
+			}
 		}
 		dstDir := exportTo
 		if dstDir == "" {
-			homeDir, _ := os.UserHomeDir()
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("determine home directory: %w", err)
+			}
 			dstDir = filepath.Join(homeDir, "airlock-claude-export")
 		}
 		if err := os.MkdirAll(dstDir, 0o700); err != nil {
@@ -68,9 +70,10 @@ var configExportCmd = &cobra.Command{
 		}
 		script := strings.Join(cpParts, " ; ")
 		exportCfg := container.ContainerConfig{
-			Image: containerImage,
-			Name:  "airlock-exporter",
-			User:  "root",
+			Image:   containerImage,
+			Name:    "airlock-exporter",
+			User:    "root",
+			CapDrop: []string{"ALL"},
 			Binds: []string{
 				fmt.Sprintf("%s:/src:ro", volumeName),
 				fmt.Sprintf("%s:/dst", dstDir),

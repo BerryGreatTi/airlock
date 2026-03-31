@@ -200,12 +200,14 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 func CleanupSession(ctx context.Context, runtime container.ContainerRuntime, cfg config.Config, id string) {
 	claudeName := "airlock-claude"
 	proxyName := "airlock-proxy"
+	networkName := cfg.NetworkName
 	if id != "" {
 		claudeName = "airlock-claude-" + id
 		proxyName = "airlock-proxy-" + id
+		networkName = networkName + "-" + id
 	}
 	fmt.Println("\n--- Session ended. Cleaning up...")
 	runtime.Remove(ctx, claudeName)
 	runtime.Remove(ctx, proxyName)
-	runtime.RemoveNetwork(ctx, cfg.NetworkName)
+	runtime.RemoveNetwork(ctx, networkName)
 }

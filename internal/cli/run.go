@@ -77,9 +77,15 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		if volumeName == "" {
 			volumeName = "airlock-claude-home"
 		}
-		homeDir, _ := os.UserHomeDir()
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("determine home directory: %w", err)
+		}
 
-		tmpDir, _ := os.MkdirTemp("", "airlock-*")
+		tmpDir, err := os.MkdirTemp("", "airlock-*")
+		if err != nil {
+			return fmt.Errorf("create temp dir: %w", err)
+		}
 		defer os.RemoveAll(tmpDir)
 
 		docker, err := container.NewDocker()

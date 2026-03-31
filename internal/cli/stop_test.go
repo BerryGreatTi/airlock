@@ -52,6 +52,9 @@ func (m *stopMockRuntime) ListContainers(_ context.Context, prefix string) ([]co
 
 func (m *stopMockRuntime) EnsureVolume(_ context.Context, name string) error    { return nil }
 func (m *stopMockRuntime) RemoveVolume(_ context.Context, name string) error    { return nil }
+func (m *stopMockRuntime) VolumeExists(_ context.Context, name string) (bool, error) {
+	return true, nil
+}
 func (m *stopMockRuntime) ReadFromVolume(_ context.Context, volumeName, filePath, dstPath string) error {
 	return nil
 }

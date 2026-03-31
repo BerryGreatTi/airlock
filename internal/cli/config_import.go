@@ -44,19 +44,21 @@ settings.json, settings.local.json.
 Existing files in the volume are skipped unless --force is set.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		volumeName := "airlock-claude-home"
-		if cfg, err := config.Load(".airlock"); err == nil && cfg.VolumeName != "" {
-			volumeName = cfg.VolumeName
-		}
-		var containerImage string
+		containerImage := "airlock-claude:latest"
 		if cfg, err := config.Load(".airlock"); err == nil {
-			containerImage = cfg.ContainerImage
-		}
-		if containerImage == "" {
-			containerImage = "airlock-claude:latest"
+			if cfg.VolumeName != "" {
+				volumeName = cfg.VolumeName
+			}
+			if cfg.ContainerImage != "" {
+				containerImage = cfg.ContainerImage
+			}
 		}
 		srcDir := importFrom
 		if srcDir == "" {
-			homeDir, _ := os.UserHomeDir()
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("determine home directory: %w", err)
+			}
 			srcDir = filepath.Join(homeDir, ".claude")
 		}
 		if _, err := os.Stat(srcDir); os.IsNotExist(err) {
@@ -104,9 +106,10 @@ Existing files in the volume are skipped unless --force is set.`,
 		// chown volume root to airlock user, then copy, then chown results
 		fullScript := "chown 1001:1001 /dst ; " + script + " ; chown -R 1001:1001 /dst"
 		importCfg := container.ContainerConfig{
-			Image: containerImage,
-			Name:  "airlock-importer",
-			User:  "root",
+			Image:   containerImage,
+			Name:    "airlock-importer",
+			User:    "root",
+			CapDrop: []string{"ALL"},
 			Binds: []string{
 				fmt.Sprintf("%s:/src:ro", srcDir),
 				fmt.Sprintf("%s:/dst", volumeName),

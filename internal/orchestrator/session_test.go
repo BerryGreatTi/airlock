@@ -107,6 +107,10 @@ func (m *MockRuntime) RemoveVolume(_ context.Context, name string) error {
 	return nil
 }
 
+func (m *MockRuntime) VolumeExists(_ context.Context, name string) (bool, error) {
+	return true, nil
+}
+
 func (m *MockRuntime) ReadFromVolume(ctx context.Context, volumeName, filePath, dstPath string) error {
 	if m.readFromVolumeFunc != nil {
 		return m.readFromVolumeFunc(ctx, volumeName, filePath, dstPath)
