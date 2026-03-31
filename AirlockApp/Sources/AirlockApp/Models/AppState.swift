@@ -135,6 +135,41 @@ struct TerminalSettings: Codable, Equatable {
     ]
 }
 
+#if canImport(AppKit)
+import AppKit
+
+struct TerminalColors: Equatable {
+    let background: NSColor
+    let foreground: NSColor
+    let caret: NSColor
+    let caretText: NSColor?
+    let selection: NSColor
+    let useBrightColors: Bool
+
+    static let dark = TerminalColors(
+        background: NSColor(red: 0.12, green: 0.12, blue: 0.18, alpha: 1),
+        foreground: NSColor(red: 0.80, green: 0.84, blue: 0.96, alpha: 1),
+        caret: NSColor(red: 0.54, green: 0.71, blue: 0.98, alpha: 1),
+        caretText: NSColor(red: 0.12, green: 0.12, blue: 0.18, alpha: 1),
+        selection: NSColor(red: 0.54, green: 0.71, blue: 0.98, alpha: 0.25),
+        useBrightColors: true
+    )
+
+    static let light = TerminalColors(
+        background: NSColor(red: 0.94, green: 0.95, blue: 0.96, alpha: 1),
+        foreground: NSColor(red: 0.30, green: 0.31, blue: 0.41, alpha: 1),
+        caret: NSColor(red: 0.12, green: 0.40, blue: 0.96, alpha: 1),
+        caretText: NSColor.white,
+        selection: NSColor(red: 0.12, green: 0.40, blue: 0.96, alpha: 0.18),
+        useBrightColors: false
+    )
+
+    static func forDarkMode(_ isDark: Bool) -> TerminalColors {
+        isDark ? .dark : .light
+    }
+}
+#endif
+
 struct AppSettings: Codable, Equatable {
     var airlockBinaryPath: String?
     var containerImage: String = "airlock-claude:latest"

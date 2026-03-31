@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showingOrphanCleanup = false
     @State private var terminalAction: TerminalAction?
     @State private var showingGlobalSettings = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationSplitView {
@@ -78,7 +79,7 @@ struct ContentView: View {
             Group {
                 switch appState.activationState(for: workspace) {
                 case .active:
-                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, terminalSettings: appState.settings.terminal, action: $terminalAction)
+                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, terminalSettings: appState.settings.terminal, terminalColors: TerminalColors.forDarkMode(colorScheme == .dark), action: $terminalAction)
                 case .activating:
                     VStack(spacing: 16) {
                         ProgressView()

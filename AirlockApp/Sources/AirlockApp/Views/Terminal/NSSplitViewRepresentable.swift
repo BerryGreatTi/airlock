@@ -7,10 +7,11 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
     let containerName: String
     let workDir: String
     let terminalSettings: TerminalSettings
+    let terminalColors: TerminalColors
     let onPaneTerminated: (UUID) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(containerName: containerName, workDir: workDir, terminalSettings: terminalSettings, onPaneTerminated: onPaneTerminated)
+        Coordinator(containerName: containerName, workDir: workDir, terminalSettings: terminalSettings, terminalColors: terminalColors, onPaneTerminated: onPaneTerminated)
     }
 
     func makeNSView(context: Context) -> NSSplitView {
@@ -41,6 +42,12 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
         if coord.terminalSettings != terminalSettings {
             coord.terminalSettings = terminalSettings
             coord.applyFontToAll()
+        }
+
+        // Update colors if theme changed
+        if coord.terminalColors != terminalColors {
+            coord.terminalColors = terminalColors
+            coord.applyColorsToAll()
         }
 
         // Toggle direction without destroying subviews (#5)
@@ -84,12 +91,14 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
         let containerName: String
         let workDir: String
         var terminalSettings: TerminalSettings
+        var terminalColors: TerminalColors
         var onPaneTerminated: (UUID) -> Void
 
-        init(containerName: String, workDir: String, terminalSettings: TerminalSettings, onPaneTerminated: @escaping (UUID) -> Void) {
+        init(containerName: String, workDir: String, terminalSettings: TerminalSettings, terminalColors: TerminalColors, onPaneTerminated: @escaping (UUID) -> Void) {
             self.containerName = containerName
             self.workDir = workDir
             self.terminalSettings = terminalSettings
+            self.terminalColors = terminalColors
             self.onPaneTerminated = onPaneTerminated
         }
 
@@ -98,6 +107,7 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
             let fontSize = CGFloat(terminalSettings.fontSize)
             terminal.font = NSFont(name: terminalSettings.fontName, size: fontSize)
                 ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            applyColors(to: terminal)
 
             let paneDelegate = PaneDelegate(paneID: paneID) { [weak self] id in
                 self?.onPaneTerminated(id)
@@ -123,6 +133,24 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
                 ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
             for terminal in terminals.values {
                 terminal.font = font
+            }
+        }
+
+        func applyColors(to terminal: AirlockTerminalView) {
+            let c = terminalColors
+            terminal.nativeBackgroundColor = c.background
+            terminal.nativeForegroundColor = c.foreground
+            terminal.caretColor = c.caret
+            terminal.caretTextColor = c.caretText
+            terminal.selectedTextBackgroundColor = c.selection
+            terminal.useBrightColors = c.useBrightColors
+            terminal.configureNativeColors()
+        }
+
+        func applyColorsToAll() {
+            for terminal in terminals.values {
+                applyColors(to: terminal)
+                terminal.needsDisplay = true
             }
         }
 
