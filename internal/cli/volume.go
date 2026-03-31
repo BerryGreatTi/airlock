@@ -68,6 +68,12 @@ var volumeResetCmd = &cobra.Command{
 		}
 		defer docker.Close()
 		ctx := context.Background()
+
+		// Remove helper containers that may hold references to the volume
+		for _, name := range []string{"airlock-importer", "airlock-exporter"} {
+			docker.Remove(ctx, name)
+		}
+
 		fmt.Printf("Removing volume %s...\n", volumeName)
 		if err := docker.RemoveVolume(ctx, volumeName); err != nil {
 			fmt.Printf("Warning: remove failed (volume may not exist): %v\n", err)
