@@ -66,20 +66,30 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 	}
 	workspace, _ = filepath.Abs(workspace)
 
-	homeDir, _ := os.UserHomeDir()
-	claudeDir := filepath.Join(homeDir, ".claude")
+	volumeName := cfg.VolumeName
+	if volumeName == "" {
+		volumeName = "airlock-claude-home"
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("determine home directory: %w", err)
+	}
 
 	tmpDir, err := os.MkdirTemp("", "airlock-"+id+"-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 
+	if err := runtime.EnsureVolume(ctx, volumeName); err != nil {
+		return nil, fmt.Errorf("ensure volume: %w", err)
+	}
+
 	params := orchestrator.SessionParams{
-		ID:        id,
-		Workspace: workspace,
-		ClaudeDir: claudeDir,
-		Config:    cfg,
-		TmpDir:    tmpDir,
+		ID:         id,
+		Workspace:  workspace,
+		VolumeName: volumeName,
+		Config:     cfg,
+		TmpDir:     tmpDir,
 	}
 
 	kp, kpErr := crypto.LoadKeyPair(keysDir)
@@ -90,12 +100,19 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 		if envFile != "" {
 			scanners = append(scanners, secrets.NewEnvScanner(envFile, workspace))
 		}
+		volSettingsDir, extractErr := orchestrator.ExtractVolumeSettings(ctx, runtime, volumeName, tmpDir)
+		if extractErr != nil {
+			return nil, fmt.Errorf("extract volume settings: %w", extractErr)
+		}
+		wsName := filepath.Base(workspace)
 		scanResult, err := secrets.ScanAll(scanners, secrets.ScanOpts{
-			Workspace:  workspace,
-			HomeDir:    homeDir,
-			PublicKey:  kp.PublicKey,
-			PrivateKey: kp.PrivateKey,
-			TmpDir:     tmpDir,
+			Workspace:         workspace,
+			HomeDir:           homeDir,
+			PublicKey:         kp.PublicKey,
+			PrivateKey:        kp.PrivateKey,
+			TmpDir:            tmpDir,
+			VolumeSettingsDir: volSettingsDir,
+			ContainerWorkDir:  fmt.Sprintf("/workspace/%s", wsName),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("scan secrets: %w", err)

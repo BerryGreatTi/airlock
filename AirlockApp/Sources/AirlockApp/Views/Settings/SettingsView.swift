@@ -7,6 +7,9 @@ struct GlobalSettingsSheet: View {
     @State private var settings = AppSettings()
     @State private var passthroughText = ""
     @State private var saved = false
+    @State private var volumeStatus = "Checking..."
+    @State private var showImportSheet = false
+    @State private var showResetAlert = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,8 +37,30 @@ struct GlobalSettingsSheet: View {
                         .font(.system(size: 12, design: .monospaced))
                         .frame(height: 80)
                 }
+
+                Section("Claude Code State Volume") {
+                    HStack {
+                        Text("airlock-claude-home")
+                            .font(.system(.body, design: .monospaced))
+                        Spacer()
+                        Text(volumeStatus)
+                            .foregroundStyle(volumeStatus == "Ready" ? .green : .secondary)
+                    }
+
+                    Button("Import from Host ~/.claude...") {
+                        showImportSheet = true
+                    }
+
+                    Button("Reset Volume...") {
+                        showResetAlert = true
+                    }
+                    .foregroundStyle(.red)
+                }
             }
             .formStyle(.grouped)
+            .task {
+                await checkVolumeStatus()
+            }
 
             HStack {
                 Spacer()
@@ -51,8 +76,34 @@ struct GlobalSettingsSheet: View {
             }
             .padding()
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 500, height: 540)
         .onAppear { load() }
+        .sheet(isPresented: $showImportSheet) {
+            ImportConfigSheet()
+        }
+        .alert("Reset Volume?", isPresented: $showResetAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                Task {
+                    let cli = CLIService()
+                    let home = FileManager.default.homeDirectoryForCurrentUser.path
+                    _ = try? await cli.run(args: ["volume", "reset", "--confirm"], workingDirectory: home)
+                    await checkVolumeStatus()
+                }
+            }
+        } message: {
+            Text("This will delete all Claude Code state including OAuth tokens, history, and memory. This cannot be undone.")
+        }
+    }
+
+    private func checkVolumeStatus() async {
+        let cli = CLIService()
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if let result = try? await cli.run(args: ["volume", "status"], workingDirectory: home) {
+            volumeStatus = result.stdout.contains("ready") ? "Ready" : "Not created"
+        } else {
+            volumeStatus = "Unknown"
+        }
     }
 
     private func load() {

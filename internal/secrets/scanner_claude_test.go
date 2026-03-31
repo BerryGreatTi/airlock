@@ -10,6 +10,60 @@ import (
 	"github.com/taeikkim92/airlock/internal/crypto"
 )
 
+func TestClaudeScannerReadsFromVolumeSettingsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	volSettingsDir := filepath.Join(tmpDir, "vol-settings")
+	os.MkdirAll(volSettingsDir, 0755)
+	settings := `{"env":{"MY_SECRET_KEY":"sk-secret-value-12345678"}}`
+	os.WriteFile(filepath.Join(volSettingsDir, "settings.json"), []byte(settings), 0644)
+
+	kp, _ := crypto.GenerateKeyPair()
+	scanner := NewClaudeScanner()
+	result, err := scanner.Scan(ScanOpts{
+		Workspace:         t.TempDir(),
+		HomeDir:           t.TempDir(),
+		PublicKey:         kp.PublicKey,
+		PrivateKey:        kp.PrivateKey,
+		TmpDir:            tmpDir,
+		VolumeSettingsDir: volSettingsDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Mounts) == 0 {
+		t.Fatal("expected shadow mounts for volume settings")
+	}
+	if result.Mounts[0].ContainerPath != "/home/airlock/.claude/settings.json" {
+		t.Errorf("unexpected container path: %s", result.Mounts[0].ContainerPath)
+	}
+	if len(result.Mapping) == 0 {
+		t.Error("expected mapping entries for encrypted secrets")
+	}
+}
+
+func TestClaudeScannerSkipsVolumeWhenDirEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	volSettingsDir := filepath.Join(tmpDir, "vol-settings")
+	os.MkdirAll(volSettingsDir, 0755)
+
+	kp, _ := crypto.GenerateKeyPair()
+	scanner := NewClaudeScanner()
+	result, err := scanner.Scan(ScanOpts{
+		Workspace:         t.TempDir(),
+		HomeDir:           t.TempDir(),
+		PublicKey:         kp.PublicKey,
+		PrivateKey:        kp.PrivateKey,
+		TmpDir:            tmpDir,
+		VolumeSettingsDir: volSettingsDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Mounts) != 0 {
+		t.Errorf("expected no mounts for empty volume settings, got %d", len(result.Mounts))
+	}
+}
+
 func setupTestKeys(t *testing.T) (string, string) {
 	t.Helper()
 	kp, err := crypto.GenerateKeyPair()

@@ -145,7 +145,14 @@ Note: The GUI always passes `--passthrough-hosts` to the CLI, overriding `config
 
 ### OAuth login inside container
 
-Claude Code uses OAuth for authentication. On macOS, tokens are stored in Keychain, which is not accessible from inside a Docker container. To authenticate inside the container:
+Claude Code uses OAuth for authentication. On macOS, tokens are stored in Keychain, which is not accessible from inside a Docker container. Inside the airlock container, tokens are stored in two files:
+
+- `~/.claude/.credentials.json` -- the actual OAuth token (accessToken, refreshToken)
+- `~/.claude.json` -- session metadata and account info (onboarding state, user ID)
+
+Both files persist across container restarts thanks to the `airlock-claude-home` Docker volume. The entrypoint scripts symlink `~/.claude.json` into the volume (`~/.claude/.claude.json`) so it survives container recreation.
+
+To authenticate for the first time:
 
 1. Open the terminal tab for the workspace
 2. Run `claude auth login`
@@ -153,16 +160,24 @@ Claude Code uses OAuth for authentication. On macOS, tokens are stored in Keycha
 4. Complete the OAuth flow in the browser
 5. Copy the callback URL and paste it back into the container terminal
 
-**Known limitation:** The `~/.claude` directory is mounted read-only, so OAuth tokens cannot be persisted. You must re-authenticate after each container restart. See [GitHub issue #15](https://github.com/BerryGreatTi/airlock/issues/15) for progress on a permanent solution.
+Authentication persists across deactivate/activate cycles. You only need to re-authenticate when the OAuth token expires (~6 hours) or after `airlock volume reset --confirm`.
 
-### "Not logged in" after successful auth login
+### "Not logged in" after deactivate/activate
 
-If `claude auth login` succeeds but `claude` still prompts for login, this is because the read-only `~/.claude` mount prevents token storage. The token is lost immediately after the login flow completes. This is tracked in [issue #15](https://github.com/BerryGreatTi/airlock/issues/15).
+If authentication is lost after restarting a workspace:
 
-Workaround: Use an API key via `.env` file instead of OAuth:
+1. Check that the volume exists: `airlock volume status` -- should show "ready"
+2. Check credentials inside the container: `docker exec airlock-claude-{id} ls -la ~/.claude/.credentials.json`
+3. Check symlink: `docker exec airlock-claude-{id} ls -la ~/.claude.json` -- should be a symlink to `.claude/.claude.json`
+4. If the symlink is missing, the Docker image may be outdated: `make docker-build`
+
+### Using API key instead of OAuth
+
+If you prefer API key authentication over OAuth:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
+Add to your `.env` file and configure it in workspace settings.
 
 ## General
 

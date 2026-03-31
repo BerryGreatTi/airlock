@@ -3,10 +3,12 @@ import SwiftTerm
 
 struct TerminalView: NSViewRepresentable {
     let containerName: String
+    let workDir: String
     let onTerminated: (() -> Void)?
 
-    init(containerName: String, onTerminated: (() -> Void)? = nil) {
+    init(containerName: String, workDir: String = "/workspace", onTerminated: (() -> Void)? = nil) {
         self.containerName = containerName
+        self.workDir = workDir
         self.onTerminated = onTerminated
     }
 
@@ -21,7 +23,7 @@ struct TerminalView: NSViewRepresentable {
         let coord = context.coordinator
         if !coord.processStarted {
             coord.processStarted = true
-            let cmd = "docker exec -it \(shellEscape(containerName)) /bin/bash"
+            let cmd = "docker exec -it -w \(shellEscape(workDir)) \(shellEscape(containerName)) /bin/bash"
             let env = CLIService.enrichedEnvironment().map { "\($0.key)=\($0.value)" }
             terminal.startAfterLayout(cmd: cmd, env: env)
         }

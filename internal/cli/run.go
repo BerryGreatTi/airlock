@@ -73,17 +73,36 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		}
 		workspace, _ = filepath.Abs(workspace)
 
-		homeDir, _ := os.UserHomeDir()
-		claudeDir := filepath.Join(homeDir, ".claude")
+		volumeName := cfg.VolumeName
+		if volumeName == "" {
+			volumeName = "airlock-claude-home"
+		}
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("determine home directory: %w", err)
+		}
 
-		tmpDir, _ := os.MkdirTemp("", "airlock-*")
+		tmpDir, err := os.MkdirTemp("", "airlock-*")
+		if err != nil {
+			return fmt.Errorf("create temp dir: %w", err)
+		}
 		defer os.RemoveAll(tmpDir)
 
+		docker, err := container.NewDocker()
+		if err != nil {
+			return fmt.Errorf("docker init: %w", err)
+		}
+		defer docker.Close()
+
+		if err := docker.EnsureVolume(ctx, volumeName); err != nil {
+			return fmt.Errorf("ensure volume: %w", err)
+		}
+
 		params := orchestrator.SessionParams{
-			Workspace: workspace,
-			ClaudeDir: claudeDir,
-			Config:    cfg,
-			TmpDir:    tmpDir,
+			Workspace:  workspace,
+			VolumeName: volumeName,
+			Config:     cfg,
+			TmpDir:     tmpDir,
 		}
 
 		kp, kpErr := crypto.LoadKeyPair(keysDir)
@@ -94,12 +113,19 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 			if runEnvFile != "" {
 				scanners = append(scanners, secrets.NewEnvScanner(runEnvFile, workspace))
 			}
+			volSettingsDir, extractErr := orchestrator.ExtractVolumeSettings(ctx, docker, volumeName, tmpDir)
+			if extractErr != nil {
+				return fmt.Errorf("extract volume settings: %w", extractErr)
+			}
+			wsName := filepath.Base(workspace)
 			scanResult, err := secrets.ScanAll(scanners, secrets.ScanOpts{
-				Workspace:  workspace,
-				HomeDir:    homeDir,
-				PublicKey:  kp.PublicKey,
-				PrivateKey: kp.PrivateKey,
-				TmpDir:     tmpDir,
+				Workspace:         workspace,
+				HomeDir:           homeDir,
+				PublicKey:         kp.PublicKey,
+				PrivateKey:        kp.PrivateKey,
+				TmpDir:            tmpDir,
+				VolumeSettingsDir: volSettingsDir,
+				ContainerWorkDir:  fmt.Sprintf("/workspace/%s", wsName),
 			})
 			if err != nil {
 				return fmt.Errorf("scan secrets: %w", err)
@@ -113,12 +139,6 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 				params.MappingPath = mappingPath
 			}
 		}
-
-		docker, err := container.NewDocker()
-		if err != nil {
-			return fmt.Errorf("docker init: %w", err)
-		}
-		defer docker.Close()
 
 		err = orchestrator.StartSession(ctx, docker, params)
 		orchestrator.CleanupSession(ctx, docker, cfg, "")

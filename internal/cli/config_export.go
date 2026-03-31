@@ -1,0 +1,98 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/taeikkim92/airlock/internal/config"
+	"github.com/taeikkim92/airlock/internal/container"
+)
+
+var (
+	exportTo    string
+	exportItems string
+)
+
+var configExportCmd = &cobra.Command{
+	Use:   "export",
+	Short: "Export airlock volume config to a host directory",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		volumeName := "airlock-claude-home"
+		containerImage := "airlock-claude:latest"
+		if cfg, err := config.Load(".airlock"); err == nil {
+			if cfg.VolumeName != "" {
+				volumeName = cfg.VolumeName
+			}
+			if cfg.ContainerImage != "" {
+				containerImage = cfg.ContainerImage
+			}
+		}
+		dstDir := exportTo
+		if dstDir == "" {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("determine home directory: %w", err)
+			}
+			dstDir = filepath.Join(homeDir, "airlock-claude-export")
+		}
+		if err := os.MkdirAll(dstDir, 0o700); err != nil {
+			return fmt.Errorf("create export directory: %w", err)
+		}
+		var items []string
+		if exportItems != "" {
+			for _, item := range strings.Split(exportItems, ",") {
+				items = append(items, strings.TrimSpace(item))
+			}
+		} else {
+			items = append(items, defaultImportItems...)
+		}
+		for _, item := range items {
+			if !allowedImportItems[item] {
+				return fmt.Errorf("invalid export item %q", item)
+			}
+		}
+		docker, err := container.NewDocker()
+		if err != nil {
+			return fmt.Errorf("docker init: %w", err)
+		}
+		defer docker.Close()
+		ctx := context.Background()
+		var cpParts []string
+		for _, item := range items {
+			srcPath := filepath.Join("/src", item)
+			dstPath := filepath.Join("/dst", item)
+			cpParts = append(cpParts, fmt.Sprintf("if [ -e %s ]; then cp -a %s %s && echo 'OK %s'; else echo 'SKIP %s'; fi", srcPath, srcPath, dstPath, item, item))
+		}
+		script := strings.Join(cpParts, " ; ")
+		exportCfg := container.ContainerConfig{
+			Image:   containerImage,
+			Name:    "airlock-exporter",
+			User:    "root",
+			CapDrop: []string{"ALL"},
+			Binds: []string{
+				fmt.Sprintf("%s:/src:ro", volumeName),
+				fmt.Sprintf("%s:/dst", dstDir),
+			},
+			Cmd: []string{"sh", "-c", script},
+		}
+		fmt.Printf("Exporting from volume %s to %s...\n", volumeName, dstDir)
+		if err := docker.RunAttached(ctx, exportCfg); err != nil {
+			if !strings.Contains(err.Error(), "exited with code") {
+				return fmt.Errorf("export failed: %w", err)
+			}
+		}
+		fmt.Printf("\nExported to %s\n", dstDir)
+		return nil
+	},
+}
+
+func init() {
+	configExportCmd.Flags().StringVar(&exportTo, "to", "", "destination directory (default: ~/airlock-claude-export/)")
+	configExportCmd.Flags().StringVar(&exportItems, "items", "", "comma-separated items to export")
+	configCmd.AddCommand(configExportCmd)
+}

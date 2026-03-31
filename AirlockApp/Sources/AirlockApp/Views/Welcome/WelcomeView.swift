@@ -5,6 +5,7 @@ struct WelcomeView: View {
     @Bindable var appState: AppState
     @Environment(\.containerService) private var containerService
     @State private var dockerRunning: Bool?
+    @State private var volumeReady: Bool?
     @State private var showingNewWorkspace = false
 
     var body: some View {
@@ -30,6 +31,12 @@ struct WelcomeView: View {
                     ok: "Running",
                     fail: "Not running"
                 )
+                preCheckRow(
+                    label: "Claude State Volume",
+                    status: volumeReady,
+                    ok: "Ready",
+                    fail: "Not created"
+                )
             }
             .padding()
             .background(Color(nsColor: .controlBackgroundColor))
@@ -45,7 +52,10 @@ struct WelcomeView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { await checkDocker() }
+        .task {
+        await checkDocker()
+        await checkVolume()
+    }
         .sheet(isPresented: $showingNewWorkspace) {
             NewWorkspaceSheet(appState: appState)
         }
@@ -73,5 +83,15 @@ struct WelcomeView: View {
 
     private func checkDocker() async {
         dockerRunning = await containerService.isDockerRunning()
+    }
+
+    private func checkVolume() async {
+        let cli = CLIService()
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if let result = try? await cli.run(args: ["volume", "status"], workingDirectory: home) {
+            volumeReady = result.stdout.contains("ready")
+        } else {
+            volumeReady = false
+        }
     }
 }

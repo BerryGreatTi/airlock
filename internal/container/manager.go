@@ -2,21 +2,28 @@ package container
 
 import (
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"strings"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/taeikkim92/airlock/internal/secrets"
 )
+
+var dockerNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 // RunOpts holds all options needed to launch the airlock container pair.
 type RunOpts struct {
 	ID               string
 	Workspace        string
+	WorkspaceName    string // basename for container path; derived from Workspace if empty
 	Image            string
 	ProxyImage       string
 	NetworkName      string
 	ShadowMounts     []secrets.ShadowMount
 	MappingPath      string
-	ClaudeDir        string
+	VolumeName       string
+	ClaudeDir        string // Deprecated: use VolumeName for writable volume mount.
 	CACertPath       string
 	ProxyPort        int
 	PassthroughHosts []string
@@ -30,6 +37,9 @@ func (o RunOpts) Validate() error {
 	if o.Image == "" {
 		return fmt.Errorf("container image is required")
 	}
+	if o.VolumeName != "" && !dockerNameRe.MatchString(o.VolumeName) {
+		return fmt.Errorf("invalid volume name %q: must match [a-zA-Z0-9][a-zA-Z0-9_.-]*", o.VolumeName)
+	}
 	return nil
 }
 
@@ -38,10 +48,12 @@ type ContainerConfig struct {
 	Image      string
 	Name       string
 	Binds      []string
+	Mounts     []mount.Mount
 	Env        []string
 	Network    string
 	CapDrop    []string
 	WorkingDir string
+	User       string
 	Tty        bool
 	Stdin      bool
 	Cmd        []string
@@ -94,10 +106,30 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 	}
 	proxyURL := fmt.Sprintf("http://%s:%d", proxyName, opts.ProxyPort)
 
-	binds := []string{
-		fmt.Sprintf("%s:/workspace", opts.Workspace),
-		fmt.Sprintf("%s:/home/airlock/.claude:ro", opts.ClaudeDir),
+	wsName := opts.WorkspaceName
+	if wsName == "" {
+		wsName = filepath.Base(opts.Workspace)
 	}
+	if wsName == "" || wsName == "." || wsName == ".." || strings.ContainsAny(wsName, "/\\") {
+		wsName = "workspace"
+	}
+	containerWorkDir := fmt.Sprintf("/workspace/%s", wsName)
+
+	binds := []string{
+		fmt.Sprintf("%s:%s", opts.Workspace, containerWorkDir),
+	}
+
+	var mounts []mount.Mount
+	if opts.VolumeName != "" {
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeVolume,
+			Source: opts.VolumeName,
+			Target: "/home/airlock/.claude",
+		})
+	} else if opts.ClaudeDir != "" {
+		binds = append(binds, fmt.Sprintf("%s:/home/airlock/.claude:ro", opts.ClaudeDir))
+	}
+
 	if opts.CACertPath != "" {
 		binds = append(binds, fmt.Sprintf("%s:/usr/local/share/ca-certificates/airlock-proxy.crt:ro", opts.CACertPath))
 	}
@@ -109,10 +141,11 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 		Image:      opts.Image,
 		Name:       claudeName,
 		Network:    opts.NetworkName,
-		WorkingDir: "/workspace",
+		WorkingDir: containerWorkDir,
 		Tty:        true,
 		Stdin:      true,
 		Binds:      binds,
+		Mounts:     mounts,
 		Env: []string{
 			fmt.Sprintf("HTTP_PROXY=%s", proxyURL),
 			fmt.Sprintf("HTTPS_PROXY=%s", proxyURL),

@@ -46,6 +46,14 @@ struct Workspace: Identifiable, Codable, Hashable {
         "airlock-proxy-\(shortID)"
     }
 
+    var containerWorkDir: String {
+        let basename = (path as NSString).lastPathComponent
+        if basename.isEmpty || basename == "." || basename == ".." {
+            return "/workspace/workspace"
+        }
+        return "/workspace/\(basename)"
+    }
+
     init(name: String, path: String, envFilePath: String? = nil, containerImageOverride: String? = nil) {
         self.id = UUID()
         self.name = name

@@ -93,9 +93,31 @@ This creates `.airlock/` containing:
 - `keys/age.pub` -- Public key
 - `config.yaml` -- Configuration
 
+It also creates a Docker named volume (`airlock-claude-home`) for persistent Claude Code state (OAuth tokens, history, sessions).
+
 Add to your `.gitignore`:
 ```
 .airlock/keys/
+```
+
+### Import host Claude Code settings (optional)
+
+If you already use Claude Code on your host machine, import your settings into the airlock volume:
+
+```bash
+airlock config import              # Imports CLAUDE.md, rules/, settings.json, settings.local.json
+airlock config import --all        # Also imports plugins/, skills/, history, projects/
+airlock config import --force      # Overwrite existing files in the volume
+```
+
+This is a one-time operation. The airlock volume is independent from your host `~/.claude` -- changes on either side do not sync automatically.
+
+### Volume management
+
+```bash
+airlock volume status              # Check if the persistent volume exists
+airlock volume reset --confirm     # Destroy and recreate (deletes OAuth tokens, history)
+airlock config export --to ~/backup  # Back up volume contents to a host directory
 ```
 
 ## Verify installation

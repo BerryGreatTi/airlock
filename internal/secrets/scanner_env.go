@@ -49,9 +49,13 @@ func (s *EnvScanner) Scan(opts ScanOpts) (*ScanResult, error) {
 		absWorkspace, _ := filepath.Abs(s.workspace)
 		rel, relErr := filepath.Rel(absWorkspace, absEnvFile)
 		if relErr == nil && !strings.HasPrefix(rel, "..") {
+			containerWorkDir := opts.ContainerWorkDir
+			if containerWorkDir == "" {
+				containerWorkDir = "/workspace"
+			}
 			result.Mounts = append(result.Mounts, ShadowMount{
 				HostPath:      encPath,
-				ContainerPath: "/workspace/" + filepath.ToSlash(rel),
+				ContainerPath: containerWorkDir + "/" + filepath.ToSlash(rel),
 			})
 		}
 	}
