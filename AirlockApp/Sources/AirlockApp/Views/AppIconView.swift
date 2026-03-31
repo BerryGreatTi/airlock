@@ -47,29 +47,7 @@ struct AirlockIconView: View {
                     y: center.y + (tabInnerR + tabOuterR) / 2 * sin(rad)
                 )
                 let tabH = tabOuterR - tabInnerR
-                // Draw rotated rectangle as a path
-                let cos_a = cos(rad)
-                let sin_a = sin(rad)
-                let hw = tabWidth / 2
-                let hh = tabH / 2
-                var tab = Path()
-                tab.move(to: CGPoint(
-                    x: tabCenter.x + (-hw * (-sin_a)) + (-hh * cos_a),
-                    y: tabCenter.y + (-hw * cos_a) + (-hh * sin_a)
-                ))
-                tab.addLine(to: CGPoint(
-                    x: tabCenter.x + (hw * (-sin_a)) + (-hh * cos_a),
-                    y: tabCenter.y + (hw * cos_a) + (-hh * sin_a)
-                ))
-                tab.addLine(to: CGPoint(
-                    x: tabCenter.x + (hw * (-sin_a)) + (hh * cos_a),
-                    y: tabCenter.y + (hw * cos_a) + (hh * sin_a)
-                ))
-                tab.addLine(to: CGPoint(
-                    x: tabCenter.x + (-hw * (-sin_a)) + (hh * cos_a),
-                    y: tabCenter.y + (-hw * cos_a) + (hh * sin_a)
-                ))
-                tab.closeSubpath()
+                let tab = Self.rotatedRect(center: tabCenter, halfWidth: tabWidth / 2, halfHeight: tabH / 2, angle: rad)
                 context.fill(tab, with: .color(w.opacity(0.6)))
             }
 
@@ -116,32 +94,11 @@ struct AirlockIconView: View {
             let clampH = drawSize * 0.022
             for angle in spokeAngles {
                 let rad = angle * .pi / 180.0
-                let clampCenter = CGPoint(
+                let cc = CGPoint(
                     x: center.x + clampR * cos(rad),
                     y: center.y + clampR * sin(rad)
                 )
-                let cos_a = cos(rad)
-                let sin_a = sin(rad)
-                let hw = clampW / 2
-                let hh = clampH / 2
-                var clamp = Path()
-                clamp.move(to: CGPoint(
-                    x: clampCenter.x + (-hw * (-sin_a)) + (-hh * cos_a),
-                    y: clampCenter.y + (-hw * cos_a) + (-hh * sin_a)
-                ))
-                clamp.addLine(to: CGPoint(
-                    x: clampCenter.x + (hw * (-sin_a)) + (-hh * cos_a),
-                    y: clampCenter.y + (hw * cos_a) + (-hh * sin_a)
-                ))
-                clamp.addLine(to: CGPoint(
-                    x: clampCenter.x + (hw * (-sin_a)) + (hh * cos_a),
-                    y: clampCenter.y + (-hw * cos_a) + (hh * sin_a)
-                ))
-                clamp.addLine(to: CGPoint(
-                    x: clampCenter.x + (-hw * (-sin_a)) + (hh * cos_a),
-                    y: clampCenter.y + (-hw * cos_a) + (hh * sin_a)
-                ))
-                clamp.closeSubpath()
+                let clamp = Self.rotatedRect(center: cc, halfWidth: clampW / 2, halfHeight: clampH / 2, angle: rad)
                 context.fill(clamp, with: .color(w.opacity(0.75)))
             }
 
@@ -200,6 +157,26 @@ struct AirlockIconView: View {
         }
         .frame(width: size, height: size)
     }
+
+    /// Build a rotated rectangle path. The tangent axis (lx) is perpendicular to
+    /// the radial direction, the radial axis (ly) points outward along the angle.
+    private static func rotatedRect(center: CGPoint, halfWidth hw: CGFloat, halfHeight hh: CGFloat, angle: Double) -> Path {
+        let cosA = cos(angle)
+        let sinA = sin(angle)
+        let corners: [(CGFloat, CGFloat)] = [
+            (-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh),
+        ]
+        var path = Path()
+        for (i, (lx, ly)) in corners.enumerated() {
+            let pt = CGPoint(
+                x: center.x + lx * (-sinA) + ly * cosA,
+                y: center.y + lx * cosA + ly * sinA
+            )
+            if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+        }
+        path.closeSubpath()
+        return path
+    }
 }
 
 // MARK: - NSImage generation for dock icon
@@ -213,7 +190,8 @@ extension AirlockIconView {
         let renderer = ImageRenderer(content: AirlockIconView(size: size))
         renderer.scale = 2.0
         guard let cgImage = renderer.cgImage else {
-            return NSImage(systemSymbolName: "lock.shield", accessibilityDescription: "Airlock")!
+            return NSImage(systemSymbolName: "lock.shield", accessibilityDescription: "Airlock")
+                ?? NSImage(size: NSSize(width: size, height: size))
         }
         return NSImage(cgImage: cgImage, size: NSSize(width: size, height: size))
     }

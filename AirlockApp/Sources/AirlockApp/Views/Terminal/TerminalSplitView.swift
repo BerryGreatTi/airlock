@@ -38,20 +38,20 @@ struct TerminalSplitView: View {
             .disabled(panes.count >= maxPanes)
 
             Button {
-                if panes.count < maxPanes { addPane() }
+                addPane()
                 splitVertical = true
             } label: {
                 Label("Split Vertical", systemImage: "rectangle.split.1x2")
             }
-            .disabled(panes.count >= maxPanes && splitVertical)
+            .disabled(panes.count >= maxPanes)
 
             Button {
-                if panes.count < maxPanes { addPane() }
+                addPane()
                 splitVertical = false
             } label: {
                 Label("Split Horizontal", systemImage: "rectangle.split.2x1")
             }
-            .disabled(panes.count >= maxPanes && !splitVertical)
+            .disabled(panes.count >= maxPanes)
 
             Divider().frame(height: 16)
 
@@ -107,17 +107,17 @@ struct TerminalSplitView: View {
         case .addPane:
             addPane()
         case .splitVertical:
-            addPane()
-            splitVertical = true
+            if addPane() { splitVertical = true }
         case .splitHorizontal:
-            addPane()
-            splitVertical = false
+            if addPane() { splitVertical = false }
         }
     }
 
-    private func addPane() {
-        guard panes.count < maxPanes else { return }
+    @discardableResult
+    private func addPane() -> Bool {
+        guard panes.count < maxPanes else { return false }
         panes.append(TerminalPane())
+        return true
     }
 
     private func removePane(id: UUID) {

@@ -156,6 +156,7 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
 
         func removeTerminal(for paneID: UUID, from splitView: NSSplitView) {
             if let terminal = terminals[paneID] {
+                terminal.processDelegate = nil
                 terminal.removeFromSuperview()
                 terminals.removeValue(forKey: paneID)
             }

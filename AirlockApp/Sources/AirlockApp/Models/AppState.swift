@@ -177,6 +177,18 @@ struct AppSettings: Codable, Equatable {
     var passthroughHosts: [String] = []
     var theme: AppTheme = .system
     var terminal: TerminalSettings = TerminalSettings()
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        airlockBinaryPath = try container.decodeIfPresent(String.self, forKey: .airlockBinaryPath)
+        containerImage = try container.decodeIfPresent(String.self, forKey: .containerImage) ?? "airlock-claude:latest"
+        proxyImage = try container.decodeIfPresent(String.self, forKey: .proxyImage) ?? "airlock-proxy:latest"
+        passthroughHosts = try container.decodeIfPresent([String].self, forKey: .passthroughHosts) ?? []
+        theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .system
+        terminal = try container.decodeIfPresent(TerminalSettings.self, forKey: .terminal) ?? TerminalSettings()
+    }
 }
 
 struct ResolvedSettings: Sendable {
