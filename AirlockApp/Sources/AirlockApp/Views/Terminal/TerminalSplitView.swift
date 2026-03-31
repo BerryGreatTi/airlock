@@ -7,6 +7,7 @@ struct TerminalPane: Identifiable {
 struct TerminalSplitView: View {
     let containerName: String
     let workDir: String
+    let terminalSettings: TerminalSettings
     @Binding var action: TerminalAction?
     @State private var panes: [TerminalPane] = [TerminalPane()]
     @State private var splitVertical = true
@@ -92,6 +93,7 @@ struct TerminalSplitView: View {
             isVertical: splitVertical,
             containerName: containerName,
             workDir: workDir,
+            terminalSettings: terminalSettings,
             onPaneTerminated: { id in
                 removePane(id: id)
             }

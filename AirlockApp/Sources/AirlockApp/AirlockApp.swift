@@ -101,11 +101,8 @@ struct AirlockApp: App {
                 Button("Containers") { appState?.switchTab(to: .containers) }
                     .keyboardShortcut("3")
 
-                Button("Diff") { appState?.switchTab(to: .diff) }
-                    .keyboardShortcut("4")
-
                 Button("Workspace Settings") { appState?.switchTab(to: .settings) }
-                    .keyboardShortcut("5")
+                    .keyboardShortcut("4")
 
                 Divider()
 

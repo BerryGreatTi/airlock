@@ -6,10 +6,11 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
     let isVertical: Bool
     let containerName: String
     let workDir: String
+    let terminalSettings: TerminalSettings
     let onPaneTerminated: (UUID) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(containerName: containerName, workDir: workDir, onPaneTerminated: onPaneTerminated)
+        Coordinator(containerName: containerName, workDir: workDir, terminalSettings: terminalSettings, onPaneTerminated: onPaneTerminated)
     }
 
     func makeNSView(context: Context) -> NSSplitView {
@@ -76,17 +77,21 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
         var currentPaneIDs: [UUID] = []
         let containerName: String
         let workDir: String
+        let terminalSettings: TerminalSettings
         var onPaneTerminated: (UUID) -> Void
 
-        init(containerName: String, workDir: String, onPaneTerminated: @escaping (UUID) -> Void) {
+        init(containerName: String, workDir: String, terminalSettings: TerminalSettings, onPaneTerminated: @escaping (UUID) -> Void) {
             self.containerName = containerName
             self.workDir = workDir
+            self.terminalSettings = terminalSettings
             self.onPaneTerminated = onPaneTerminated
         }
 
         func createTerminal(for paneID: UUID) -> AirlockTerminalView {
             let terminal = AirlockTerminalView(frame: .zero)
-            terminal.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+            let fontSize = CGFloat(terminalSettings.fontSize)
+            terminal.font = NSFont(name: terminalSettings.fontName, size: fontSize)
+                ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
 
             let paneDelegate = PaneDelegate(paneID: paneID) { [weak self] id in
                 self?.onPaneTerminated(id)

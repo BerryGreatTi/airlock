@@ -91,9 +91,9 @@ final class AppStateTests: XCTestCase {
     }
 
     func testDetailTabCases() {
-        let tabs: [DetailTab] = [.terminal, .secrets, .containers, .diff, .settings]
-        XCTAssertEqual(tabs.count, 5)
+        let tabs: [DetailTab] = [.terminal, .secrets, .containers, .settings]
+        XCTAssertEqual(tabs.count, 4)
         XCTAssertNotEqual(DetailTab.terminal, DetailTab.secrets)
-        XCTAssertNotEqual(DetailTab.containers, DetailTab.diff)
+        XCTAssertNotEqual(DetailTab.containers, DetailTab.settings)
     }
 }

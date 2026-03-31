@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 enum SessionStatus: Equatable {
     case stopped
@@ -11,7 +12,6 @@ enum DetailTab: Hashable {
     case terminal
     case secrets
     case containers
-    case diff
     case settings
 }
 
@@ -29,6 +29,7 @@ final class AppState {
     var activationStates: [UUID: ActivationState] = [:]
     var selectedTab: DetailTab = .terminal
     var lastError: String?
+    var settings: AppSettings = AppSettings()
 
     private var tabSwitchTask: Task<Void, Never>?
 
@@ -104,11 +105,43 @@ final class AppState {
     }
 }
 
+enum AppTheme: String, Codable, CaseIterable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
+struct TerminalSettings: Codable, Equatable {
+    var fontName: String = "SF Mono"
+    var fontSize: Double = 13
+
+    static let availableFonts: [String] = [
+        "SF Mono",
+        "Menlo",
+        "Monaco",
+        "Courier New",
+        "Andale Mono",
+        "JetBrains Mono",
+        "Fira Code",
+        "Source Code Pro",
+    ]
+}
+
 struct AppSettings: Codable, Equatable {
     var airlockBinaryPath: String?
     var containerImage: String = "airlock-claude:latest"
     var proxyImage: String = "airlock-proxy:latest"
     var passthroughHosts: [String] = []
+    var theme: AppTheme = .system
+    var terminal: TerminalSettings = TerminalSettings()
 }
 
 struct ResolvedSettings: Sendable {
