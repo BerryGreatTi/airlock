@@ -92,6 +92,9 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
 	}
+	if err := opts.Validate(); err != nil {
+		return fmt.Errorf("invalid run options: %w", err)
+	}
 
 	fmt.Println("Starting decryption proxy...")
 	proxyCfg := container.BuildProxyConfig(opts)
@@ -166,6 +169,9 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
+	}
+	if err := opts.Validate(); err != nil {
+		return fmt.Errorf("invalid run options: %w", err)
 	}
 
 	proxyCfg := container.BuildProxyConfig(opts)
