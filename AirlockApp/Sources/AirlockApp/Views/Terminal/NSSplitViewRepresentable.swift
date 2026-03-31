@@ -37,6 +37,12 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
         let coord = context.coordinator
         coord.onPaneTerminated = onPaneTerminated
 
+        // Update font on all existing terminals if settings changed
+        if coord.terminalSettings != terminalSettings {
+            coord.terminalSettings = terminalSettings
+            coord.applyFontToAll()
+        }
+
         // Toggle direction without destroying subviews (#5)
         if splitView.isVertical != isVertical {
             splitView.isVertical = isVertical
@@ -77,7 +83,7 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
         var currentPaneIDs: [UUID] = []
         let containerName: String
         let workDir: String
-        let terminalSettings: TerminalSettings
+        var terminalSettings: TerminalSettings
         var onPaneTerminated: (UUID) -> Void
 
         init(containerName: String, workDir: String, terminalSettings: TerminalSettings, onPaneTerminated: @escaping (UUID) -> Void) {
@@ -109,6 +115,15 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
             let cmd = "docker exec -it -w \(escapedWorkDir) \(escaped) /bin/bash"
             let env = CLIService.enrichedEnvironment().map { "\($0.key)=\($0.value)" }
             terminal.startAfterLayout(cmd: cmd, env: env)
+        }
+
+        func applyFontToAll() {
+            let fontSize = CGFloat(terminalSettings.fontSize)
+            let font = NSFont(name: terminalSettings.fontName, size: fontSize)
+                ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            for terminal in terminals.values {
+                terminal.font = font
+            }
         }
 
         func removeTerminal(for paneID: UUID, from splitView: NSSplitView) {
