@@ -26,7 +26,7 @@ Two-container setup on a Docker bridge network:
 
 The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management is behind a `ContainerRuntime` interface (`internal/container/runtime.go`) for testability.
 
-**GUI** (`AirlockApp/`): macOS native SwiftUI app -- the primary user interface (see [ADR-0004](docs/decisions/ADR-0004-gui-primary-interface.md)). Uses SwiftTerm (SPM) for terminal emulation. The GUI invokes the Go CLI as a subprocess engine -- it never implements container/crypto logic directly. All Docker interaction from Swift is via subprocess (`docker exec`, `docker logs`), not Docker API.
+**GUI** (`AirlockApp/`): macOS native SwiftUI app -- the primary user interface (see [ADR-0004](docs/decisions/ADR-0004-gui-primary-interface.md)). Uses SwiftTerm (SPM) for terminal emulation. The GUI invokes the Go CLI as a subprocess engine -- it never implements container/crypto logic directly. All Docker interaction from Swift is via subprocess (`docker exec`, `docker logs`), not Docker API. Tabs: Terminal (Cmd+1), Secrets (Cmd+2), Containers (Cmd+3), Settings (Cmd+4). Theme switching (System/Light/Dark) and terminal font/size are in global settings. App quit deactivates all running containers (10s timeout). Dock icon is programmatic (Canvas-drawn airlock hatch, no xcassets).
 
 ## Testing
 

@@ -6,10 +6,12 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
     let isVertical: Bool
     let containerName: String
     let workDir: String
+    let terminalSettings: TerminalSettings
+    let terminalColors: TerminalColors
     let onPaneTerminated: (UUID) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(containerName: containerName, workDir: workDir, onPaneTerminated: onPaneTerminated)
+        Coordinator(containerName: containerName, workDir: workDir, terminalSettings: terminalSettings, terminalColors: terminalColors, onPaneTerminated: onPaneTerminated)
     }
 
     func makeNSView(context: Context) -> NSSplitView {
@@ -35,6 +37,18 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
     func updateNSView(_ splitView: NSSplitView, context: Context) {
         let coord = context.coordinator
         coord.onPaneTerminated = onPaneTerminated
+
+        // Update font on all existing terminals if settings changed
+        if coord.terminalSettings != terminalSettings {
+            coord.terminalSettings = terminalSettings
+            coord.applyFontToAll()
+        }
+
+        // Update colors if theme changed
+        if coord.terminalColors != terminalColors {
+            coord.terminalColors = terminalColors
+            coord.applyColorsToAll()
+        }
 
         // Toggle direction without destroying subviews (#5)
         if splitView.isVertical != isVertical {
@@ -76,17 +90,24 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
         var currentPaneIDs: [UUID] = []
         let containerName: String
         let workDir: String
+        var terminalSettings: TerminalSettings
+        var terminalColors: TerminalColors
         var onPaneTerminated: (UUID) -> Void
 
-        init(containerName: String, workDir: String, onPaneTerminated: @escaping (UUID) -> Void) {
+        init(containerName: String, workDir: String, terminalSettings: TerminalSettings, terminalColors: TerminalColors, onPaneTerminated: @escaping (UUID) -> Void) {
             self.containerName = containerName
             self.workDir = workDir
+            self.terminalSettings = terminalSettings
+            self.terminalColors = terminalColors
             self.onPaneTerminated = onPaneTerminated
         }
 
         func createTerminal(for paneID: UUID) -> AirlockTerminalView {
             let terminal = AirlockTerminalView(frame: .zero)
-            terminal.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+            let fontSize = CGFloat(terminalSettings.fontSize)
+            terminal.font = NSFont(name: terminalSettings.fontName, size: fontSize)
+                ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            applyColors(to: terminal)
 
             let paneDelegate = PaneDelegate(paneID: paneID) { [weak self] id in
                 self?.onPaneTerminated(id)
@@ -106,8 +127,35 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
             terminal.startAfterLayout(cmd: cmd, env: env)
         }
 
+        func applyFontToAll() {
+            let fontSize = CGFloat(terminalSettings.fontSize)
+            let font = NSFont(name: terminalSettings.fontName, size: fontSize)
+                ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            for terminal in terminals.values {
+                terminal.font = font
+            }
+        }
+
+        func applyColors(to terminal: AirlockTerminalView) {
+            let c = terminalColors
+            terminal.nativeBackgroundColor = c.background
+            terminal.nativeForegroundColor = c.foreground
+            terminal.caretColor = c.caret
+            terminal.caretTextColor = c.caretText
+            terminal.selectedTextBackgroundColor = c.selection
+            terminal.useBrightColors = c.useBrightColors
+        }
+
+        func applyColorsToAll() {
+            for terminal in terminals.values {
+                applyColors(to: terminal)
+                terminal.needsDisplay = true
+            }
+        }
+
         func removeTerminal(for paneID: UUID, from splitView: NSSplitView) {
             if let terminal = terminals[paneID] {
+                terminal.processDelegate = nil
                 terminal.removeFromSuperview()
                 terminals.removeValue(forKey: paneID)
             }

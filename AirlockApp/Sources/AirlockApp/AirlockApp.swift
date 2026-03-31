@@ -46,6 +46,7 @@ extension FocusedValues {
 
 @main
 struct AirlockApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @FocusedValue(\.appState) private var appState
     @FocusedValue(\.containerService) private var containerService
     @FocusedValue(\.terminalAction) private var terminalAction
@@ -58,6 +59,7 @@ struct AirlockApp: App {
                 .onAppear {
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
+                    NSApp.applicationIconImage = AirlockIconView.makeNSImage()
                 }
         }
         .defaultSize(width: 1200, height: 700)
@@ -99,11 +101,8 @@ struct AirlockApp: App {
                 Button("Containers") { appState?.switchTab(to: .containers) }
                     .keyboardShortcut("3")
 
-                Button("Diff") { appState?.switchTab(to: .diff) }
-                    .keyboardShortcut("4")
-
                 Button("Workspace Settings") { appState?.switchTab(to: .settings) }
-                    .keyboardShortcut("5")
+                    .keyboardShortcut("4")
 
                 Divider()
 

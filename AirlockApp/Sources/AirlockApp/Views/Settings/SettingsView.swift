@@ -14,6 +14,37 @@ struct GlobalSettingsSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                Section("Appearance") {
+                    Picker("Theme", selection: $settings.theme) {
+                        ForEach(AppTheme.allCases, id: \.self) { theme in
+                            Text(theme.rawValue).tag(theme)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("Terminal") {
+                    Picker("Font", selection: $settings.terminal.fontName) {
+                        ForEach(TerminalSettings.availableFonts, id: \.self) { font in
+                            Text(font).font(.system(size: 12, design: .monospaced)).tag(font)
+                        }
+                    }
+                    HStack {
+                        Text("Font size")
+                        Slider(value: $settings.terminal.fontSize, in: 9...24, step: 1)
+                        Text("\(Int(settings.terminal.fontSize)) pt")
+                            .font(.system(.body, design: .monospaced))
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                    // Preview
+                    Text("The quick brown fox jumps over the lazy dog")
+                        .font(.custom(settings.terminal.fontName, size: settings.terminal.fontSize))
+                        .padding(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+
                 Section("General") {
                     HStack {
                         TextField("Airlock binary path", text: Binding(
@@ -76,7 +107,7 @@ struct GlobalSettingsSheet: View {
             }
             .padding()
         }
-        .frame(width: 500, height: 540)
+        .frame(width: 500, height: 700)
         .onAppear { load() }
         .sheet(isPresented: $showImportSheet) {
             ImportConfigSheet()
@@ -119,13 +150,17 @@ struct GlobalSettingsSheet: View {
             .filter { !$0.isEmpty }
 
         let store = WorkspaceStore()
-        try? store.saveSettings(settings)
-
-        withAnimation { saved = true }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1))
-            saved = false
-            dismiss()
+        do {
+            try store.saveSettings(settings)
+            appState.settings = settings
+            withAnimation { saved = true }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                saved = false
+                dismiss()
+            }
+        } catch {
+            appState.lastError = "Failed to save settings: \(error.localizedDescription)"
         }
     }
 

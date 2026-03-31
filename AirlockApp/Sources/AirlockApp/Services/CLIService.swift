@@ -38,28 +38,6 @@ final class CLIService {
         )
     }
 
-    func gitDiff(workingDirectory: String) async throws -> CLIResult {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/git")
-        process.arguments = ["diff", "HEAD", "--unified=3"]
-        process.currentDirectoryURL = URL(filePath: workingDirectory)
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        try process.run()
-        process.waitUntilExit()
-        return CLIResult(
-            exitCode: process.terminationStatus,
-            stdout: String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
-            stderr: String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        )
-    }
-
-    func isGitRepo(path: String) -> Bool {
-        FileManager.default.fileExists(atPath: (path as NSString).appendingPathComponent(".git"))
-    }
-
     func isAirlockInitialized(path: String) -> Bool {
         FileManager.default.fileExists(atPath: (path as NSString).appendingPathComponent(".airlock"))
     }

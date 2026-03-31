@@ -2,18 +2,6 @@ import XCTest
 @testable import AirlockApp
 
 final class CLIServiceTests: XCTestCase {
-    func testIsGitRepo() {
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try! FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let cli = CLIService()
-        XCTAssertFalse(cli.isGitRepo(path: tempDir.path))
-
-        try! FileManager.default.createDirectory(at: tempDir.appendingPathComponent(".git"), withIntermediateDirectories: true)
-        XCTAssertTrue(cli.isGitRepo(path: tempDir.path))
-    }
-
     func testIsAirlockInitialized() {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try! FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)

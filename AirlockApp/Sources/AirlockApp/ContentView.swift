@@ -8,6 +8,15 @@ struct ContentView: View {
     @State private var showingOrphanCleanup = false
     @State private var terminalAction: TerminalAction?
     @State private var showingGlobalSettings = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDarkTerminal: Bool {
+        switch appState.settings.theme {
+        case .dark: return true
+        case .light: return false
+        case .system: return colorScheme == .dark
+        }
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -16,6 +25,7 @@ struct ContentView: View {
         } detail: {
             detailContent
         }
+        .preferredColorScheme(appState.settings.theme.colorScheme)
         .environment(\.containerService, containerService)
         .focusedValue(\.appState, appState)
         .focusedValue(\.containerService, containerService)
@@ -63,7 +73,6 @@ struct ContentView: View {
             tabButton("Terminal", tab: .terminal, icon: "terminal")
             tabButton("Secrets", tab: .secrets, icon: "key")
             tabButton("Containers", tab: .containers, icon: "shippingbox")
-            tabButton("Diff", tab: .diff, icon: "doc.text.magnifyingglass")
             tabButton("Settings", tab: .settings, icon: "gear")
             Spacer()
         }
@@ -78,7 +87,7 @@ struct ContentView: View {
             Group {
                 switch appState.activationState(for: workspace) {
                 case .active:
-                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, action: $terminalAction)
+                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, terminalSettings: appState.settings.terminal, terminalColors: TerminalColors.forDarkMode(isDarkTerminal), action: $terminalAction)
                 case .activating:
                     VStack(spacing: 16) {
                         ProgressView()
@@ -105,9 +114,6 @@ struct ContentView: View {
             }
             if appState.selectedTab == .containers {
                 ContainerStatusView(workspace: workspace, appState: appState)
-            }
-            if appState.selectedTab == .diff {
-                DiffContainerView(workspace: workspace, appState: appState)
             }
             if appState.selectedTab == .settings {
                 WorkspaceSettingsView(workspace: workspace, appState: appState)
@@ -151,6 +157,7 @@ struct ContentView: View {
     private func loadState() {
         let store = WorkspaceStore()
         appState.workspaces = (try? store.loadWorkspaces()) ?? []
+        appState.settings = (try? store.loadSettings()) ?? AppSettings()
     }
 
     private func reconcileRunningContainers() {

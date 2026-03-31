@@ -7,6 +7,8 @@ struct TerminalPane: Identifiable {
 struct TerminalSplitView: View {
     let containerName: String
     let workDir: String
+    let terminalSettings: TerminalSettings
+    let terminalColors: TerminalColors
     @Binding var action: TerminalAction?
     @State private var panes: [TerminalPane] = [TerminalPane()]
     @State private var splitVertical = true
@@ -36,18 +38,18 @@ struct TerminalSplitView: View {
             .disabled(panes.count >= maxPanes)
 
             Button {
-                splitVertical = true
+                if addPane() { splitVertical = true }
             } label: {
                 Label("Split Vertical", systemImage: "rectangle.split.1x2")
             }
-            .disabled(panes.count < 2)
+            .disabled(panes.count >= maxPanes)
 
             Button {
-                splitVertical = false
+                if addPane() { splitVertical = false }
             } label: {
                 Label("Split Horizontal", systemImage: "rectangle.split.2x1")
             }
-            .disabled(panes.count < 2)
+            .disabled(panes.count >= maxPanes)
 
             Divider().frame(height: 16)
 
@@ -90,6 +92,8 @@ struct TerminalSplitView: View {
             isVertical: splitVertical,
             containerName: containerName,
             workDir: workDir,
+            terminalSettings: terminalSettings,
+            terminalColors: terminalColors,
             onPaneTerminated: { id in
                 removePane(id: id)
             }
@@ -101,17 +105,17 @@ struct TerminalSplitView: View {
         case .addPane:
             addPane()
         case .splitVertical:
-            addPane()
-            splitVertical = true
+            if addPane() { splitVertical = true }
         case .splitHorizontal:
-            addPane()
-            splitVertical = false
+            if addPane() { splitVertical = false }
         }
     }
 
-    private func addPane() {
-        guard panes.count < maxPanes else { return }
+    @discardableResult
+    private func addPane() -> Bool {
+        guard panes.count < maxPanes else { return false }
         panes.append(TerminalPane())
+        return true
     }
 
     private func removePane(id: UUID) {

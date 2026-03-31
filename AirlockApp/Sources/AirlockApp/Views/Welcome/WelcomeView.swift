@@ -12,9 +12,7 @@ struct WelcomeView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: "lock.shield")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
+            AirlockIconView(size: 128)
 
             Text("Welcome to Airlock")
                 .font(.largeTitle)

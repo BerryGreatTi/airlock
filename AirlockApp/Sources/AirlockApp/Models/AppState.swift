@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 enum SessionStatus: Equatable {
     case stopped
@@ -11,7 +12,6 @@ enum DetailTab: Hashable {
     case terminal
     case secrets
     case containers
-    case diff
     case settings
 }
 
@@ -29,6 +29,7 @@ final class AppState {
     var activationStates: [UUID: ActivationState] = [:]
     var selectedTab: DetailTab = .terminal
     var lastError: String?
+    var settings: AppSettings = AppSettings()
 
     private var tabSwitchTask: Task<Void, Never>?
 
@@ -78,9 +79,7 @@ final class AppState {
         activationStates[workspace.id] = .activating
         lastError = nil
         do {
-            let store = WorkspaceStore()
-            let settings = (try? store.loadSettings()) ?? AppSettings()
-            let resolved = ResolvedSettings(global: settings, workspace: workspace)
+            let resolved = ResolvedSettings(global: self.settings, workspace: workspace)
             _ = try await service.activateAndWaitReady(workspace: workspace, resolved: resolved)
             activationStates[workspace.id] = .active
             if let idx = workspaces.firstIndex(where: { $0.id == workspace.id }) {
@@ -104,11 +103,98 @@ final class AppState {
     }
 }
 
+enum AppTheme: String, Codable, CaseIterable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
+struct TerminalSettings: Codable, Equatable {
+    var fontName: String = "SF Mono"
+    var fontSize: Double = 13
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fontName = try container.decodeIfPresent(String.self, forKey: .fontName) ?? "SF Mono"
+        fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize) ?? 13
+    }
+
+    static let availableFonts: [String] = [
+        "SF Mono",
+        "Menlo",
+        "Monaco",
+        "Courier New",
+        "Andale Mono",
+        "JetBrains Mono",
+        "Fira Code",
+        "Source Code Pro",
+    ]
+}
+
+#if canImport(AppKit)
+import AppKit
+
+struct TerminalColors: Equatable {
+    let background: NSColor
+    let foreground: NSColor
+    let caret: NSColor
+    let caretText: NSColor?
+    let selection: NSColor
+    let useBrightColors: Bool
+
+    static let dark = TerminalColors(
+        background: NSColor(red: 0.12, green: 0.12, blue: 0.18, alpha: 1),
+        foreground: NSColor(red: 0.80, green: 0.84, blue: 0.96, alpha: 1),
+        caret: NSColor(red: 0.54, green: 0.71, blue: 0.98, alpha: 1),
+        caretText: NSColor(red: 0.12, green: 0.12, blue: 0.18, alpha: 1),
+        selection: NSColor(red: 0.54, green: 0.71, blue: 0.98, alpha: 0.25),
+        useBrightColors: true
+    )
+
+    static let light = TerminalColors(
+        background: NSColor(red: 0.94, green: 0.95, blue: 0.96, alpha: 1),
+        foreground: NSColor(red: 0.30, green: 0.31, blue: 0.41, alpha: 1),
+        caret: NSColor(red: 0.12, green: 0.40, blue: 0.96, alpha: 1),
+        caretText: NSColor.white,
+        selection: NSColor(red: 0.12, green: 0.40, blue: 0.96, alpha: 0.18),
+        useBrightColors: false
+    )
+
+    static func forDarkMode(_ isDark: Bool) -> TerminalColors {
+        isDark ? .dark : .light
+    }
+}
+#endif
+
 struct AppSettings: Codable, Equatable {
     var airlockBinaryPath: String?
     var containerImage: String = "airlock-claude:latest"
     var proxyImage: String = "airlock-proxy:latest"
     var passthroughHosts: [String] = []
+    var theme: AppTheme = .system
+    var terminal: TerminalSettings = TerminalSettings()
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        airlockBinaryPath = try container.decodeIfPresent(String.self, forKey: .airlockBinaryPath)
+        containerImage = try container.decodeIfPresent(String.self, forKey: .containerImage) ?? "airlock-claude:latest"
+        proxyImage = try container.decodeIfPresent(String.self, forKey: .proxyImage) ?? "airlock-proxy:latest"
+        passthroughHosts = try container.decodeIfPresent([String].self, forKey: .passthroughHosts) ?? []
+        theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .system
+        terminal = try container.decodeIfPresent(TerminalSettings.self, forKey: .terminal) ?? TerminalSettings()
+    }
 }
 
 struct ResolvedSettings: Sendable {
