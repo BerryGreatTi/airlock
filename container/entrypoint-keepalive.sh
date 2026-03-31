@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+# Symlink ~/.claude.json into the persistent volume so OAuth tokens survive
+# container recreation. Claude Code stores session/account metadata in this
+# file (separate from ~/.claude/.credentials.json which holds the actual token).
+if [ -d /home/airlock/.claude ] && [ ! -L /home/airlock/.claude.json ]; then
+    # Preserve existing file if present (e.g., from a previous session in the volume)
+    if [ -f /home/airlock/.claude.json ] && [ ! -f /home/airlock/.claude/.claude.json ]; then
+        mv /home/airlock/.claude.json /home/airlock/.claude/.claude.json
+    fi
+    ln -sf /home/airlock/.claude/.claude.json /home/airlock/.claude.json
+fi
+
 # Load encrypted env file if mounted.
 # Values are single-quoted by airlock to prevent shell injection.
 if [ -f /run/airlock/env.enc ]; then

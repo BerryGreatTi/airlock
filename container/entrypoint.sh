@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 
+# Symlink ~/.claude.json into the persistent volume so OAuth tokens survive
+# container recreation.
+if [ -d /home/airlock/.claude ] && [ ! -L /home/airlock/.claude.json ]; then
+    if [ -f /home/airlock/.claude.json ] && [ ! -f /home/airlock/.claude/.claude.json ]; then
+        mv /home/airlock/.claude.json /home/airlock/.claude/.claude.json
+    fi
+    ln -sf /home/airlock/.claude/.claude.json /home/airlock/.claude.json
+fi
+
 # Load encrypted env file if mounted.
 # Values are single-quoted by airlock to prevent shell injection.
 if [ -f /run/airlock/env.enc ]; then
