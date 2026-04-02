@@ -11,10 +11,75 @@ import (
 )
 
 var (
-	secretDecryptKeys  string
-	secretDecryptAll   bool
+	secretDecryptKeys   string
+	secretDecryptAll    bool
 	secretDecryptFormat string
 )
+
+// RunSecretDecrypt decrypts selected keys in a secret file in-place.
+// mode: "all" or comma-separated key paths.
+func RunSecretDecrypt(filePath, mode, formatOverride, keysDir string) error {
+	kp, err := crypto.LoadKeyPair(keysDir)
+	if err != nil {
+		return fmt.Errorf("load keypair (run 'airlock init' first): %w", err)
+	}
+
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+
+	var format secrets.FileFormat
+	if formatOverride != "" {
+		format = secrets.FileFormat(formatOverride)
+	} else {
+		format = secrets.DetectFormat(absPath)
+	}
+	parser := secrets.ParserFor(format)
+
+	entries, err := parser.Parse(absPath)
+	if err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+
+	var keySet map[string]bool
+	if mode != "all" {
+		keySet = make(map[string]bool)
+		for _, k := range strings.Split(mode, ",") {
+			keySet[strings.TrimSpace(k)] = true
+		}
+	}
+
+	decrypted := make([]secrets.SecretEntry, len(entries))
+	count := 0
+	for i, e := range entries {
+		decrypted[i] = e
+		if !crypto.IsEncrypted(e.Value) {
+			continue
+		}
+		shouldDecrypt := keySet == nil || keySet[e.Path]
+		if !shouldDecrypt {
+			continue
+		}
+		inner, err := crypto.UnwrapENC(e.Value)
+		if err != nil {
+			return fmt.Errorf("unwrap %s: %w", e.Path, err)
+		}
+		plain, err := crypto.Decrypt(inner, kp.PrivateKey)
+		if err != nil {
+			return fmt.Errorf("decrypt %s: %w", e.Path, err)
+		}
+		decrypted[i] = secrets.SecretEntry{Path: e.Path, Value: plain}
+		count++
+	}
+
+	if err := parser.Write(absPath, decrypted); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	fmt.Printf("Decrypted %d keys in %s\n", count, filepath.Base(absPath))
+	return nil
+}
 
 var secretDecryptCmd = &cobra.Command{
 	Use:   "decrypt <file>",
@@ -22,72 +87,16 @@ var secretDecryptCmd = &cobra.Command{
 	Long:  `Decrypt specified keys in-place. Use --keys or --all to select which keys to decrypt.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		filePath := args[0]
-		keysDir := filepath.Join(".airlock", "keys")
-
-		kp, err := crypto.LoadKeyPair(keysDir)
-		if err != nil {
-			return fmt.Errorf("load keypair (run 'airlock init' first): %w", err)
-		}
-
-		absPath, err := filepath.Abs(filePath)
-		if err != nil {
-			return fmt.Errorf("resolve path: %w", err)
-		}
-
-		var format secrets.FileFormat
-		if secretDecryptFormat != "" {
-			format = secrets.FileFormat(secretDecryptFormat)
-		} else {
-			format = secrets.DetectFormat(absPath)
-		}
-		parser := secrets.ParserFor(format)
-
-		entries, err := parser.Parse(absPath)
-		if err != nil {
-			return fmt.Errorf("parse: %w", err)
-		}
-
-		// Determine which keys to decrypt
-		var keySet map[string]bool
-		if !secretDecryptAll && secretDecryptKeys != "" {
-			keySet = make(map[string]bool)
-			for _, k := range strings.Split(secretDecryptKeys, ",") {
-				keySet[strings.TrimSpace(k)] = true
-			}
-		} else if !secretDecryptAll {
+		var mode string
+		switch {
+		case secretDecryptAll:
+			mode = "all"
+		case secretDecryptKeys != "":
+			mode = secretDecryptKeys
+		default:
 			return fmt.Errorf("specify --keys or --all")
 		}
-
-		decrypted := make([]secrets.SecretEntry, len(entries))
-		count := 0
-		for i, e := range entries {
-			decrypted[i] = e
-			if !crypto.IsEncrypted(e.Value) {
-				continue
-			}
-			shouldDecrypt := keySet == nil || keySet[e.Path]
-			if !shouldDecrypt {
-				continue
-			}
-			inner, err := crypto.UnwrapENC(e.Value)
-			if err != nil {
-				return fmt.Errorf("unwrap %s: %w", e.Path, err)
-			}
-			plain, err := crypto.Decrypt(inner, kp.PrivateKey)
-			if err != nil {
-				return fmt.Errorf("decrypt %s: %w", e.Path, err)
-			}
-			decrypted[i] = secrets.SecretEntry{Path: e.Path, Value: plain}
-			count++
-		}
-
-		if err := parser.Write(absPath, decrypted); err != nil {
-			return fmt.Errorf("write: %w", err)
-		}
-
-		fmt.Printf("Decrypted %d keys in %s\n", count, filepath.Base(absPath))
-		return nil
+		return RunSecretDecrypt(args[0], mode, secretDecryptFormat, filepath.Join(".airlock", "keys"))
 	},
 }
 
