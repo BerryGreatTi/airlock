@@ -6,6 +6,7 @@ require (
 	filippo.io/age v1.3.1
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/spf13/cobra v1.10.2
+	gopkg.in/ini.v1 v1.67.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

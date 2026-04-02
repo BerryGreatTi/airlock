@@ -82,6 +82,7 @@ A mitmproxy sidecar intercepts outbound HTTP/HTTPS traffic from the agent contai
 - **Binary request bodies** are skipped (no UTF-8 decoding attempted).
 - **Non-HTTP MCP servers** that use secrets for database connections or local auth receive `ENC[age:...]` values and fail. Only HTTP-based API calls are decrypted by the proxy.
 - **Heuristic false negatives** -- secrets with unusual naming or format may not be detected in settings files. Use `.env` files for such cases (all values encrypted unconditionally).
+- **In-place encryption is destructive** -- `airlock secret encrypt` modifies files on disk. The plaintext is replaced with `ENC[age:...]` ciphertext. Deleting an encrypted file without first running `airlock secret decrypt` means permanent data loss. The proxy mapping is ephemeral (exists only during a session). Always use version control or backups for files containing encrypted secrets.
 
 ## Recommendations for Enterprise Deployment
 

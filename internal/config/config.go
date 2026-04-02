@@ -5,16 +5,25 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/taeikkim92/airlock/internal/fsutil"
 	"gopkg.in/yaml.v3"
 )
 
+// SecretFileConfig describes a user-registered secret file for encryption.
+type SecretFileConfig struct {
+	Path        string   `yaml:"path"`
+	Format      string   `yaml:"format"`               // "dotenv", "json", "yaml", "ini", "properties", "text"
+	EncryptKeys []string `yaml:"encrypt_keys,omitempty"` // keys to encrypt; empty = encrypt all
+}
+
 type Config struct {
-	ContainerImage   string   `yaml:"container_image"`
-	ProxyImage       string   `yaml:"proxy_image"`
-	NetworkName      string   `yaml:"network_name"`
-	ProxyPort        int      `yaml:"proxy_port"`
-	PassthroughHosts []string `yaml:"passthrough_hosts"`
-	VolumeName       string   `yaml:"volume_name"`
+	ContainerImage   string             `yaml:"container_image"`
+	ProxyImage       string             `yaml:"proxy_image"`
+	NetworkName      string             `yaml:"network_name"`
+	ProxyPort        int                `yaml:"proxy_port"`
+	PassthroughHosts []string           `yaml:"passthrough_hosts"`
+	VolumeName       string             `yaml:"volume_name"`
+	SecretFiles      []SecretFileConfig `yaml:"secret_files,omitempty"`
 }
 
 func Default() Config {
@@ -34,10 +43,7 @@ func Save(cfg Config, airlockDir string) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 	configPath := filepath.Join(airlockDir, "config.yaml")
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
-		return fmt.Errorf("write config %s: %w", configPath, err)
-	}
-	return nil
+	return fsutil.AtomicWrite(configPath, data, 0o600)
 }
 
 func Load(airlockDir string) (Config, error) {

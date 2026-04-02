@@ -17,6 +17,12 @@
 | `airlock volume reset --confirm` | Destroy and recreate the `.claude` volume |
 | `airlock config import` | Import host `~/.claude` into the airlock volume |
 | `airlock config export` | Export airlock volume to host directory |
+| `airlock secret add <file>` | Register a secret file (auto-detects format) |
+| `airlock secret list [--json]` | List registered secret files |
+| `airlock secret show <file> [--json]` | Show entries in a secret file |
+| `airlock secret encrypt <file>` | Encrypt keys (`--keys`, `--all`, or `--auto`) |
+| `airlock secret decrypt <file>` | Decrypt keys (`--keys` or `--all`) |
+| `airlock secret remove <file>` | Unregister a secret file |
 
 ## Architecture
 
@@ -24,7 +30,7 @@ Two-container setup on a Docker bridge network:
 - **airlock-claude**: Runs the AI agent. A Docker named volume (`airlock-claude-home`) provides persistent `~/.claude` state (OAuth, history, sessions). Secrets in settings files exist only as `ENC[age:...]` ciphertext via shadow mounts.
 - **airlock-proxy**: mitmproxy sidecar. Intercepts outbound HTTPS, replaces `ENC[age:...]` with decrypted values at the network boundary. Claude API traffic passes through untouched.
 
-The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management is behind a `ContainerRuntime` interface (`internal/container/runtime.go`) for testability.
+The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management is behind a `ContainerRuntime` interface (`internal/container/runtime.go`) for testability. Secret files can be registered in `.airlock/config.yaml` via `airlock secret add` -- supported formats: dotenv, JSON, YAML, INI, properties, plain text (whole-file). The `FileScanner` encrypts registered files and creates shadow mounts at scan time. Key paths use `/` separator (e.g., `db/password`).
 
 **GUI** (`AirlockApp/`): macOS native SwiftUI app -- the primary user interface (see [ADR-0004](docs/decisions/ADR-0004-gui-primary-interface.md)). Uses SwiftTerm (SPM) for terminal emulation. The GUI invokes the Go CLI as a subprocess engine -- it never implements container/crypto logic directly. All Docker interaction from Swift is via subprocess (`docker exec`, `docker logs`), not Docker API. Tabs: Terminal (Cmd+1), Secrets (Cmd+2), Containers (Cmd+3), Settings (Cmd+4). Theme switching (System/Light/Dark) and terminal font/size are in global settings. App quit deactivates all running containers (10s timeout). Dock icon is programmatic (Canvas-drawn airlock hatch, no xcassets).
 
@@ -41,6 +47,7 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - `*.age` and `*.key` files are gitignored for the same reason
 - `mapping.json` (encrypted-to-plaintext mapping) is gitignored -- it exists only at runtime
 - The `ENC[age:...]` wrapper pattern is the contract between the agent container and the proxy. Changing the pattern format breaks decryption.
+- `airlock secret encrypt` modifies files in-place. Deleting an encrypted file without `airlock secret decrypt` first means permanent plaintext loss. The proxy mapping is ephemeral (session-only).
 - Version is injected at build time via `LDFLAGS` -- `cli.Version` defaults to `"dev"` if not set
 - SwiftTerm's `startProcess` has no `currentDirectory` parameter -- the GUI uses `bash -c "cd <path> && exec airlock run"` as a workaround
 - SwiftTerm delegate methods use `SwiftTerm.TerminalView` (not `LocalProcessTerminalView`) as the `source` parameter type for `hostCurrentDirectoryUpdate` and `processTerminated`

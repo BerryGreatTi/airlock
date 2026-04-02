@@ -104,3 +104,87 @@ func TestConfigVolumeNameBackwardsCompat(t *testing.T) {
 		t.Errorf("expected default VolumeName for old config, got %s", loaded.VolumeName)
 	}
 }
+
+func TestSecretFilesRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.SecretFiles = []config.SecretFileConfig{
+		{Path: "/path/to/.env", Format: "dotenv"},
+		{Path: "/path/to/config.json", Format: "json", EncryptKeys: []string{"db/password", "api/key"}},
+		{Path: "/path/to/secrets.yaml", Format: "yaml", EncryptKeys: []string{"data/password"}},
+	}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.SecretFiles) != 3 {
+		t.Fatalf("expected 3 secret files, got %d", len(loaded.SecretFiles))
+	}
+	if loaded.SecretFiles[0].Path != "/path/to/.env" {
+		t.Errorf("expected /path/to/.env, got %s", loaded.SecretFiles[0].Path)
+	}
+	if loaded.SecretFiles[0].Format != "dotenv" {
+		t.Errorf("expected dotenv, got %s", loaded.SecretFiles[0].Format)
+	}
+	if len(loaded.SecretFiles[1].EncryptKeys) != 2 {
+		t.Errorf("expected 2 encrypt keys, got %d", len(loaded.SecretFiles[1].EncryptKeys))
+	}
+}
+
+func TestSecretFilesBackwardsCompat(t *testing.T) {
+	dir := t.TempDir()
+	// Config without secret_files field (old format)
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.SecretFiles != nil {
+		t.Errorf("expected nil SecretFiles for old config, got %v", loaded.SecretFiles)
+	}
+}
+
+func TestSecretFilesEmptyEncryptKeys(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.SecretFiles = []config.SecretFileConfig{
+		{Path: ".env", Format: "dotenv"},
+	}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify omitempty: encrypt_keys should not appear in YAML
+	data, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains := string(data); len(data) > 0 {
+		for _, line := range splitLines(contains) {
+			if line == "  encrypt_keys:" || line == "    encrypt_keys:" {
+				t.Error("encrypt_keys should be omitted when empty")
+			}
+		}
+	}
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
