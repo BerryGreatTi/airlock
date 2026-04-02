@@ -270,6 +270,7 @@ struct SecretsView: View {
             let path: String
             let value: String
             let encrypted: Bool
+            let is_secret: Bool
         }
 
         guard let data = result.stdout.data(using: .utf8),
@@ -283,6 +284,7 @@ struct SecretsView: View {
                 path: e.path,
                 value: e.value,
                 encrypted: e.encrypted,
+                isSecret: e.is_secret,
                 source: file.label,
                 isEditable: true
             )
@@ -347,6 +349,13 @@ struct SecretsView: View {
         return secretFiles.first { $0.id == id }
     }
 
+    private static let secretKeywords = ["TOKEN", "KEY", "SECRET", "PASSWORD", "CREDENTIAL", "AUTH"]
+
+    private static func looksLikeSecret(_ key: String) -> Bool {
+        let upper = key.uppercased()
+        return secretKeywords.contains { upper.contains($0) }
+    }
+
     private func loadSettingsSecrets() {
         let settingsFiles: [(path: String, label: String)] = [
             (workspace.path + "/.claude/settings.json", "project"),
@@ -369,9 +378,10 @@ struct SecretsView: View {
 
             if let envBlock = json["env"] as? [String: String] {
                 for (key, value) in envBlock {
+                    let enc = value.hasPrefix("ENC[age:")
                     results.append(SecretEntry(
                         path: key, value: value,
-                        encrypted: value.hasPrefix("ENC[age:"),
+                        encrypted: enc, isSecret: enc || Self.looksLikeSecret(key),
                         source: source, isEditable: false
                     ))
                 }
@@ -381,9 +391,10 @@ struct SecretsView: View {
                     if let server = serverVal as? [String: Any],
                        let envBlock = server["env"] as? [String: String] {
                         for (key, value) in envBlock {
+                            let enc = value.hasPrefix("ENC[age:")
                             results.append(SecretEntry(
                                 path: key, value: value,
-                                encrypted: value.hasPrefix("ENC[age:"),
+                                encrypted: enc, isSecret: enc || Self.looksLikeSecret(key),
                                 source: "mcp:\(serverName)", isEditable: false
                             ))
                         }

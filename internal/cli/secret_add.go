@@ -21,6 +21,9 @@ func RunSecretAdd(filePath, formatOverride, airlockDir string) error {
 	var format secrets.FileFormat
 	if formatOverride != "" {
 		format = secrets.FileFormat(formatOverride)
+		if err := secrets.ValidateFormat(format); err != nil {
+			return err
+		}
 	} else {
 		format = secrets.DetectFormat(absPath)
 	}

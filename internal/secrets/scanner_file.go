@@ -105,7 +105,7 @@ func (s *FileScanner) processFile(fc config.SecretFileConfig, opts ScanOpts, ind
 	}
 
 	// Build shadow mount: map to the container-side workspace path.
-	containerPath, err := s.containerPath(fc.Path, opts)
+	containerPath, err := s.containerPath(fc.Path, opts, index)
 	if err != nil {
 		return nil, nil, fmt.Errorf("container path: %w", err)
 	}
@@ -121,7 +121,7 @@ func (s *FileScanner) processFile(fc config.SecretFileConfig, opts ScanOpts, ind
 // containerPath computes the container-side path for a host file.
 // Files inside the workspace get mapped under ContainerWorkDir.
 // Files outside the workspace get mapped under /run/airlock/files/.
-func (s *FileScanner) containerPath(hostPath string, opts ScanOpts) (string, error) {
+func (s *FileScanner) containerPath(hostPath string, opts ScanOpts, index int) (string, error) {
 	absFile, err := filepath.Abs(hostPath)
 	if err != nil {
 		return "", fmt.Errorf("resolve file path: %w", err)
@@ -142,8 +142,8 @@ func (s *FileScanner) containerPath(hostPath string, opts ScanOpts) (string, err
 		return containerWorkDir + "/" + filepath.ToSlash(rel), nil
 	}
 
-	// File is outside workspace -- place under /run/airlock/files/.
-	return "/run/airlock/files/" + filepath.Base(hostPath), nil
+	// File is outside workspace -- disambiguate with index to avoid collision.
+	return fmt.Sprintf("/run/airlock/files/%d-%s", index, filepath.Base(hostPath)), nil
 }
 
 // detectFileFormat determines the FileFormat from config or auto-detection.

@@ -71,18 +71,16 @@ func showJSON(format secrets.FileFormat, entries []secrets.SecretEntry) error {
 		Entries: make([]showEntry, len(entries)),
 	}
 	for i, e := range entries {
+		isSecret := e.Encrypted || secrets.IsSecret(secrets.LeafKey(e.Path), e.Value)
 		value := e.Value
-		if !e.Encrypted && len(value) > 0 {
+		if !e.Encrypted && isSecret {
 			value = "***"
-		}
-		if e.Encrypted {
-			value = e.Value
 		}
 		out.Entries[i] = showEntry{
 			Path:      e.Path,
 			Value:     value,
 			Encrypted: e.Encrypted,
-			IsSecret:  e.Encrypted || secrets.IsSecret(secrets.LeafKey(e.Path), e.Value),
+			IsSecret:  isSecret,
 		}
 	}
 	data, err := json.MarshalIndent(out, "", "  ")

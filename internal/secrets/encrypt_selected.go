@@ -25,7 +25,7 @@ func EncryptSelected(entries []SecretEntry, keys map[string]bool, pubKey, privKe
 			if err != nil {
 				return nil, nil, fmt.Errorf("decrypt %s for mapping: %w", entry.Path, err)
 			}
-			result = append(result, SecretEntry{Path: entry.Path, Value: entry.Value})
+			result = append(result, SecretEntry{Path: entry.Path, Value: entry.Value, Encrypted: true})
 			mapping[entry.Value] = plain
 			continue
 		}
@@ -43,7 +43,7 @@ func EncryptSelected(entries []SecretEntry, keys map[string]bool, pubKey, privKe
 		}
 
 		wrapped := crypto.WrapENC(ciphertext)
-		result = append(result, SecretEntry{Path: entry.Path, Value: wrapped})
+		result = append(result, SecretEntry{Path: entry.Path, Value: wrapped, Encrypted: true})
 		mapping[wrapped] = entry.Value
 	}
 

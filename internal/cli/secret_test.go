@@ -154,7 +154,7 @@ func TestSecretEncryptAll(t *testing.T) {
 	envPath := filepath.Join(workspace, ".env")
 	os.WriteFile(envPath, []byte("API_KEY=sk_live_test123456\nHOST=localhost\n"), 0644)
 
-	err := cli.RunSecretEncrypt(envPath, "all", keysDir, airlockDir)
+	err := cli.RunSecretEncrypt(envPath, "all", "", keysDir, airlockDir)
 	if err != nil {
 		t.Fatalf("RunSecretEncrypt: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestSecretEncryptSelectedKeys(t *testing.T) {
 	envPath := filepath.Join(workspace, ".env")
 	os.WriteFile(envPath, []byte("API_KEY=sk_live_test123456\nHOST=localhost\n"), 0644)
 
-	err := cli.RunSecretEncrypt(envPath, "API_KEY", keysDir, airlockDir)
+	err := cli.RunSecretEncrypt(envPath, "API_KEY", "", keysDir, airlockDir)
 	if err != nil {
 		t.Fatalf("RunSecretEncrypt: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestSecretEncryptAuto(t *testing.T) {
 	envPath := filepath.Join(workspace, ".env")
 	os.WriteFile(envPath, []byte("SECRET_TOKEN=sk_live_longvalue123\nDEBUG=true_value_long_enough\n"), 0644)
 
-	err := cli.RunSecretEncrypt(envPath, "auto", keysDir, airlockDir)
+	err := cli.RunSecretEncrypt(envPath, "auto", "", keysDir, airlockDir)
 	if err != nil {
 		t.Fatalf("RunSecretEncrypt: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestSecretEncryptJSON(t *testing.T) {
 	jsonPath := filepath.Join(workspace, "config.json")
 	os.WriteFile(jsonPath, []byte(`{"db":{"password":"secret123","host":"localhost"},"port":5432}`), 0644)
 
-	err := cli.RunSecretEncrypt(jsonPath, "db/password", keysDir, airlockDir)
+	err := cli.RunSecretEncrypt(jsonPath, "db/password", "", keysDir, airlockDir)
 	if err != nil {
 		t.Fatalf("RunSecretEncrypt: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestSecretEncryptNoKeys(t *testing.T) {
 	envPath := filepath.Join(workspace, ".env")
 	os.WriteFile(envPath, []byte("KEY=val\n"), 0644)
 
-	err := cli.RunSecretEncrypt(envPath, "all", "/nonexistent/keys", "")
+	err := cli.RunSecretEncrypt(envPath, "all", "", "/nonexistent/keys", "")
 	if err == nil {
 		t.Error("expected error when keys don't exist")
 	}
@@ -265,7 +265,7 @@ func TestSecretDecryptAll(t *testing.T) {
 	os.WriteFile(envPath, []byte("API_KEY=sk_live_test123456\nHOST=myhost\n"), 0644)
 
 	// Encrypt first
-	cli.RunSecretEncrypt(envPath, "all", keysDir, airlockDir)
+	cli.RunSecretEncrypt(envPath, "all", "", keysDir, airlockDir)
 
 	// Decrypt
 	err := cli.RunSecretDecrypt(envPath, "all", "", keysDir)
@@ -289,7 +289,7 @@ func TestSecretDecryptSelectedKeys(t *testing.T) {
 	envPath := filepath.Join(workspace, ".env")
 	os.WriteFile(envPath, []byte("A=secret_a_12345678\nB=secret_b_12345678\n"), 0644)
 
-	cli.RunSecretEncrypt(envPath, "all", keysDir, airlockDir)
+	cli.RunSecretEncrypt(envPath, "all", "", keysDir, airlockDir)
 
 	// Decrypt only A
 	err := cli.RunSecretDecrypt(envPath, "A", "", keysDir)
@@ -314,7 +314,7 @@ func TestSecretDecryptWithFormatOverride(t *testing.T) {
 	path := filepath.Join(workspace, "creds.ini")
 	os.WriteFile(path, []byte("[default]\naws_secret=longvalue12345678\n"), 0644)
 
-	cli.RunSecretEncrypt(path, "all", keysDir, "")
+	cli.RunSecretEncrypt(path, "all", "", keysDir, "")
 
 	// Verify encrypted
 	data, _ := os.ReadFile(path)
@@ -355,7 +355,7 @@ func TestSecretEncryptDecryptRoundTrip(t *testing.T) {
 	original := "TOKEN=sk_live_abc123def456\nDATABASE_URL=postgres://localhost/mydb\n"
 	os.WriteFile(envPath, []byte(original), 0644)
 
-	if err := cli.RunSecretEncrypt(envPath, "all", keysDir, airlockDir); err != nil {
+	if err := cli.RunSecretEncrypt(envPath, "all", "", keysDir, airlockDir); err != nil {
 		t.Fatal(err)
 	}
 

@@ -19,22 +19,19 @@ struct SecretEntry: Identifiable {
     let path: String
     let value: String
     let encrypted: Bool
+    let isSecret: Bool
     let source: String
     let isEditable: Bool
 
     var status: SecretStatus {
         if encrypted { return .encrypted }
-        let sensitivePatterns = ["KEY", "SECRET", "PASSWORD", "TOKEN", "CREDENTIAL", "AUTH"]
-        let leaf = path.split(separator: "/").last.map(String.init) ?? path
-        if sensitivePatterns.contains(where: { leaf.uppercased().contains($0) }) {
-            return .plaintext
-        }
+        if isSecret { return .plaintext }
         return .notSecret
     }
 
     var maskedValue: String {
         if encrypted { return "ENC[age:...]" }
-        if status == .plaintext { return String(repeating: "*", count: min(value.count, 20)) }
+        if isSecret { return String(repeating: "*", count: min(value.count, 20)) }
         return value
     }
 }

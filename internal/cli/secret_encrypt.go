@@ -13,14 +13,15 @@ import (
 )
 
 var (
-	secretEncryptKeys string
-	secretEncryptAll  bool
-	secretEncryptAuto bool
+	secretEncryptKeys   string
+	secretEncryptAll    bool
+	secretEncryptAuto   bool
+	secretEncryptFormat string
 )
 
 // RunSecretEncrypt encrypts selected keys in a secret file in-place.
 // mode: "all", "auto", or comma-separated key paths.
-func RunSecretEncrypt(filePath, mode, keysDir, airlockDir string) error {
+func RunSecretEncrypt(filePath, mode, formatOverride, keysDir, airlockDir string) error {
 	kp, err := crypto.LoadKeyPair(keysDir)
 	if err != nil {
 		return fmt.Errorf("load keypair (run 'airlock init' first): %w", err)
@@ -31,7 +32,15 @@ func RunSecretEncrypt(filePath, mode, keysDir, airlockDir string) error {
 		return fmt.Errorf("resolve path: %w", err)
 	}
 
-	format := secrets.DetectFormat(absPath)
+	var format secrets.FileFormat
+	if formatOverride != "" {
+		format = secrets.FileFormat(formatOverride)
+		if err := secrets.ValidateFormat(format); err != nil {
+			return err
+		}
+	} else {
+		format = secrets.DetectFormat(absPath)
+	}
 	parser := secrets.ParserFor(format)
 
 	entries, err := parser.Parse(absPath)
@@ -118,7 +127,7 @@ var secretEncryptCmd = &cobra.Command{
 		default:
 			return fmt.Errorf("specify --keys, --all, or --auto")
 		}
-		return RunSecretEncrypt(args[0], mode, filepath.Join(".airlock", "keys"), ".airlock")
+		return RunSecretEncrypt(args[0], mode, secretEncryptFormat, filepath.Join(".airlock", "keys"), ".airlock")
 	},
 }
 
@@ -126,5 +135,6 @@ func init() {
 	secretEncryptCmd.Flags().StringVar(&secretEncryptKeys, "keys", "", "comma-separated key paths to encrypt")
 	secretEncryptCmd.Flags().BoolVar(&secretEncryptAll, "all", false, "encrypt all entries")
 	secretEncryptCmd.Flags().BoolVar(&secretEncryptAuto, "auto", false, "auto-detect secrets using heuristic")
+	secretEncryptCmd.Flags().StringVar(&secretEncryptFormat, "format", "", "file format override")
 	secretCmd.AddCommand(secretEncryptCmd)
 }
