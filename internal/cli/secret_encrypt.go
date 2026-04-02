@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -89,8 +90,12 @@ var secretEncryptCmd = &cobra.Command{
 					for k := range keySet {
 						keys = append(keys, k)
 					}
-					cfg.SecretFiles[i].EncryptKeys = keys
-					config.Save(cfg, airlockDir)
+					updated := cfg.SecretFiles[i]
+					updated.EncryptKeys = keys
+					cfg.SecretFiles[i] = updated
+					if err := config.Save(cfg, airlockDir); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to save encrypt_keys to config: %v\n", err)
+					}
 					break
 				}
 			}
