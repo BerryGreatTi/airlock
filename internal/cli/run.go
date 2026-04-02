@@ -110,7 +110,14 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 			scanners := []secrets.Scanner{
 				secrets.NewClaudeScanner(),
 			}
-			if runEnvFile != "" {
+			// Add FileScanner for registered secret files from config
+			var fileScanner *secrets.FileScanner
+			if len(cfg.SecretFiles) > 0 {
+				fileScanner = secrets.NewFileScanner(cfg.SecretFiles, workspace)
+				scanners = append(scanners, fileScanner)
+			}
+			// Add EnvScanner if --env provided and not already in FileScanner
+			if runEnvFile != "" && (fileScanner == nil || !fileScanner.ContainsPath(runEnvFile)) {
 				scanners = append(scanners, secrets.NewEnvScanner(runEnvFile, workspace))
 			}
 			volSettingsDir, extractErr := orchestrator.ExtractVolumeSettings(ctx, docker, volumeName, tmpDir)
