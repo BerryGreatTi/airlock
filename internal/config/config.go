@@ -8,13 +8,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SecretFileConfig describes a user-registered secret file for encryption.
+type SecretFileConfig struct {
+	Path        string   `yaml:"path"`
+	Format      string   `yaml:"format"`               // "dotenv", "json", "yaml", "ini", "properties", "text"
+	EncryptKeys []string `yaml:"encrypt_keys,omitempty"` // keys to encrypt; empty = encrypt all
+}
+
 type Config struct {
-	ContainerImage   string   `yaml:"container_image"`
-	ProxyImage       string   `yaml:"proxy_image"`
-	NetworkName      string   `yaml:"network_name"`
-	ProxyPort        int      `yaml:"proxy_port"`
-	PassthroughHosts []string `yaml:"passthrough_hosts"`
-	VolumeName       string   `yaml:"volume_name"`
+	ContainerImage   string             `yaml:"container_image"`
+	ProxyImage       string             `yaml:"proxy_image"`
+	NetworkName      string             `yaml:"network_name"`
+	ProxyPort        int                `yaml:"proxy_port"`
+	PassthroughHosts []string           `yaml:"passthrough_hosts"`
+	VolumeName       string             `yaml:"volume_name"`
+	SecretFiles      []SecretFileConfig `yaml:"secret_files,omitempty"`
 }
 
 func Default() Config {
