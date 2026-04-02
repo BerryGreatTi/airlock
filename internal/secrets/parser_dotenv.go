@@ -1,6 +1,8 @@
 package secrets
 
-// DotenvParser wraps the existing ParseEnvFile/WriteEnvFile functions.
+import "strings"
+
+// DotenvParser wraps the existing ParseEnvFile for parsing, uses AtomicWrite for writing.
 type DotenvParser struct{}
 
 func (p *DotenvParser) Format() FileFormat { return FormatDotenv }
@@ -21,9 +23,12 @@ func (p *DotenvParser) Parse(path string) ([]SecretEntry, error) {
 }
 
 func (p *DotenvParser) Write(path string, entries []SecretEntry) error {
-	envEntries := make([]EnvEntry, len(entries))
-	for i, e := range entries {
-		envEntries[i] = EnvEntry{Key: e.Path, Value: e.Value}
+	var sb strings.Builder
+	for _, e := range entries {
+		sb.WriteString(e.Path)
+		sb.WriteString("='")
+		sb.WriteString(e.Value)
+		sb.WriteString("'\n")
 	}
-	return WriteEnvFile(path, envEntries)
+	return AtomicWrite(path, []byte(sb.String()), 0644)
 }

@@ -23,7 +23,9 @@ struct SecretsView: View {
         return entries
     }
 
-    private let settingsFileID = UUID()
+    // Stable UUID for the Claude Settings pseudo-file entry.
+    // Must not change across view re-creations so selection state is preserved.
+    private let settingsFileID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
     var body: some View {
         VStack(spacing: 0) {
