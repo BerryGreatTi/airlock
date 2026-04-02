@@ -1,6 +1,9 @@
 package secrets
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // DotenvParser wraps the existing ParseEnvFile for parsing, uses AtomicWrite for writing.
 type DotenvParser struct{}
@@ -25,6 +28,9 @@ func (p *DotenvParser) Parse(path string) ([]SecretEntry, error) {
 func (p *DotenvParser) Write(path string, entries []SecretEntry) error {
 	var sb strings.Builder
 	for _, e := range entries {
+		if strings.ContainsAny(e.Value, "\n\r") {
+			return fmt.Errorf("dotenv format does not support multiline values (key %q)", e.Path)
+		}
 		sb.WriteString(e.Path)
 		sb.WriteString("='")
 		sb.WriteString(e.Value)

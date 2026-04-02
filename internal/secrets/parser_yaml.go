@@ -71,18 +71,32 @@ func (p *YAMLParser) Write(path string, entries []SecretEntry) error {
 
 	// Read original to preserve structure and comments
 	data, err := os.ReadFile(path)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("read yaml for write: %w", err)
 	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("parse yaml for write: %w", err)
-	}
-	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
-		updateYAMLNode("", doc.Content[0], entryMap)
+
+	if err == nil {
+		// Update existing file in-place to preserve comments/structure
+		var doc yaml.Node
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			return fmt.Errorf("parse yaml for write: %w", err)
+		}
+		if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+			updateYAMLNode("", doc.Content[0], entryMap)
+		}
+		out, err := yaml.Marshal(&doc)
+		if err != nil {
+			return fmt.Errorf("marshal yaml: %w", err)
+		}
+		return AtomicWrite(path, out, 0644)
 	}
 
-	out, err := yaml.Marshal(&doc)
+	// No existing file -- build from entries as simple key-value map
+	simple := make(map[string]string, len(entries))
+	for _, e := range entries {
+		simple[e.Path] = e.Value
+	}
+	out, err := yaml.Marshal(simple)
 	if err != nil {
 		return fmt.Errorf("marshal yaml: %w", err)
 	}
