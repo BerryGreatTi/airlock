@@ -115,10 +115,12 @@ struct SecretsView: View {
                 ContentUnavailableView {
                     Label("Error", systemImage: "exclamationmark.triangle")
                 } description: { Text(error) }
+                .frame(maxHeight: .infinity)
             } else if displayedEntries.isEmpty {
                 ContentUnavailableView {
                     Label("No Secrets", systemImage: "key")
                 } description: { Text("Select a file or add one to get started") }
+                .frame(maxHeight: .infinity)
             } else {
                 Table(displayedEntries, selection: $selectedEntryIDs) {
                     TableColumn("Name") { entry in
