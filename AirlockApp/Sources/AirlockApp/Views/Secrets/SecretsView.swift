@@ -1,68 +1,49 @@
 import SwiftUI
 
-private enum SecretStatus: String {
-    case encrypted = "Encrypted"
-    case plaintext = "Plaintext"
-    case notSecret = "Not Secret"
-
-    var color: Color {
-        switch self {
-        case .encrypted: return .green
-        case .plaintext: return .orange
-        case .notSecret: return .secondary
-        }
-    }
-}
-
-private struct EnvEntry: Identifiable {
-    let id: UUID = UUID()
-    var key: String
-    var value: String
-    var source: String = ".env"
-
-    var status: SecretStatus {
-        if value.hasPrefix("ENC[age:") { return .encrypted }
-        let sensitivePatterns = ["KEY", "SECRET", "PASSWORD", "TOKEN", "CREDENTIAL", "API_KEY"]
-        if sensitivePatterns.contains(where: { key.uppercased().contains($0) }) { return .plaintext }
-        return .notSecret
-    }
-
-    var maskedValue: String {
-        if status == .encrypted { return "ENC[age:...]" }
-        if status == .plaintext { return String(repeating: "*", count: min(value.count, 20)) }
-        return value
-    }
-}
-
 @MainActor
 struct SecretsView: View {
     let workspace: Workspace
     @Bindable var appState: AppState
-    @State private var entries: [EnvEntry] = []
-    @State private var settingsEntries: [EnvEntry] = []
-    @State private var rawLines: [String] = []
+    @State private var secretFiles: [SecretFile] = []
+    @State private var selectedFileID: UUID?
+    @State private var entries: [SecretEntry] = []
+    @State private var settingsEntries: [SecretEntry] = []
+    @State private var selectedEntryIDs: Set<UUID> = []
+    @State private var isProcessing = false
     @State private var errorMessage: String?
-    @State private var showingAddEntry = false
-    @State private var newKey = ""
-    @State private var newValue = ""
+    @State private var showingAddFile = false
 
-    private var allEntries: [EnvEntry] {
-        entries + settingsEntries
+    private var displayedEntries: [SecretEntry] {
+        if selectedFileID == nil {
+            return entries + settingsEntries
+        }
+        if selectedFileID == settingsFileID {
+            return settingsEntries
+        }
+        return entries
     }
+
+    private let settingsFileID = UUID()
 
     var body: some View {
         VStack(spacing: 0) {
             if appState.isActive(workspace) {
                 restartBanner
             }
-
-            secretsTable
-                .task {
-                    if let envFile = workspace.envFilePath {
-                        loadEnvFile(envFile)
-                    }
-                    loadSettingsSecrets()
-                }
+            HSplitView {
+                fileListPanel
+                    .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
+                entriesPanel
+            }
+        }
+        .task {
+            await loadSecretFiles()
+            loadSettingsSecrets()
+        }
+        .sheet(isPresented: $showingAddFile) {
+            AddSecretFileSheet(workspace: workspace) {
+                Task { await loadSecretFiles() }
+            }
         }
     }
 
@@ -78,37 +59,75 @@ struct SecretsView: View {
         .background(.yellow.opacity(0.1))
     }
 
-    private var secretsTable: some View {
+    // MARK: - File List Panel
+
+    private var fileListPanel: some View {
         VStack(spacing: 0) {
-            toolbar
+            List(selection: $selectedFileID) {
+                Section("Files") {
+                    ForEach(secretFiles) { file in
+                        HStack {
+                            Image(systemName: file.format.iconName)
+                                .foregroundStyle(.secondary)
+                            Text(file.label)
+                                .lineLimit(1)
+                        }
+                        .tag(file.id)
+                        .contextMenu {
+                            Button("Remove", role: .destructive) {
+                                Task { await removeFile(file) }
+                            }
+                        }
+                    }
+                }
+                Section("Claude Settings") {
+                    Label("settings.json", systemImage: "gearshape.2")
+                        .tag(settingsFileID)
+                }
+            }
+            .listStyle(.sidebar)
+            .onChange(of: selectedFileID) { _, newValue in
+                Task { await loadEntriesForSelection(newValue) }
+            }
+
+            Divider()
+            HStack {
+                Button { showingAddFile = true } label: {
+                    Label("Add File", systemImage: "plus")
+                }
+                .buttonStyle(.borderless)
+                Spacer()
+            }
+            .padding(8)
+        }
+    }
+
+    // MARK: - Entries Panel
+
+    private var entriesPanel: some View {
+        VStack(spacing: 0) {
+            entriesToolbar
             Divider()
 
             if let error = errorMessage {
                 ContentUnavailableView {
                     Label("Error", systemImage: "exclamationmark.triangle")
                 } description: { Text(error) }
-            } else if allEntries.isEmpty {
+            } else if displayedEntries.isEmpty {
                 ContentUnavailableView {
                     Label("No Secrets", systemImage: "key")
-                } description: { Text("No secrets found in .env or settings files") }
+                } description: { Text("Select a file or add one to get started") }
             } else {
-                Table(allEntries) {
-                    TableColumn("Source") { entry in
-                        Text(entry.source)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .width(min: 60, ideal: 80)
-
+                Table(displayedEntries, selection: $selectedEntryIDs) {
                     TableColumn("Name") { entry in
-                        Text(entry.key).fontDesign(.monospaced)
+                        Text(entry.path).fontDesign(.monospaced)
                     }
                     .width(min: 120, ideal: 200)
 
                     TableColumn("Status") { entry in
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(entry.status.color)
+                                .fill(colorForStatus(entry.status))
                                 .frame(width: 6, height: 6)
                             Text(entry.status.rawValue)
                                 .font(.caption)
@@ -130,36 +149,39 @@ struct SecretsView: View {
         }
     }
 
-    private var toolbar: some View {
+    private var entriesToolbar: some View {
         HStack(spacing: 8) {
             Button {
-                showingAddEntry = true
+                Task { await encryptSelected() }
             } label: {
-                Label("Add Entry", systemImage: "plus")
+                Label("Encrypt Selected", systemImage: "lock")
             }
+            .disabled(selectedPlaintextEntries.isEmpty || isProcessing)
 
             Button {
-                encryptAll()
+                Task { await decryptSelected() }
             } label: {
-                Label("Encrypt All", systemImage: "lock")
+                Label("Decrypt Selected", systemImage: "lock.open")
             }
-            .disabled(entries.filter { $0.status == .plaintext }.isEmpty)
+            .disabled(selectedEncryptedEntries.isEmpty || isProcessing)
+
+            if isProcessing {
+                ProgressView()
+                    .controlSize(.small)
+            }
 
             Spacer()
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Color(nsColor: .controlBackgroundColor))
-        .sheet(isPresented: $showingAddEntry) {
-            addEntrySheet
-        }
     }
 
     private var summaryBar: some View {
         HStack {
-            let encrypted = allEntries.filter { $0.status == .encrypted }.count
-            let plaintext = allEntries.filter { $0.status == .plaintext }.count
-            Text("\(allEntries.count) entries")
+            let encrypted = displayedEntries.filter { $0.status == .encrypted }.count
+            let plaintext = displayedEntries.filter { $0.status == .plaintext }.count
+            Text("\(displayedEntries.count) entries")
             Text("\(encrypted) encrypted")
                 .foregroundStyle(.green)
             if plaintext > 0 {
@@ -175,28 +197,152 @@ struct SecretsView: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
-    private var addEntrySheet: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add Entry").font(.title3).fontWeight(.semibold)
-            TextField("Key", text: $newKey).textFieldStyle(.roundedBorder)
-            TextField("Value", text: $newValue).textFieldStyle(.roundedBorder)
-            HStack {
-                Spacer()
-                Button("Cancel") { showingAddEntry = false }
-                    .keyboardShortcut(.cancelAction)
-                Button("Add") {
-                    entries.append(EnvEntry(key: newKey, value: newValue))
-                    saveEntries()
-                    newKey = ""
-                    newValue = ""
-                    showingAddEntry = false
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(newKey.isEmpty)
-            }
+    // MARK: - Helpers
+
+    private var selectedPlaintextEntries: [SecretEntry] {
+        displayedEntries.filter { selectedEntryIDs.contains($0.id) && $0.status == .plaintext }
+    }
+
+    private var selectedEncryptedEntries: [SecretEntry] {
+        displayedEntries.filter { selectedEntryIDs.contains($0.id) && $0.status == .encrypted }
+    }
+
+    private func colorForStatus(_ status: SecretStatus) -> Color {
+        switch status {
+        case .encrypted: return .green
+        case .plaintext: return .orange
+        case .notSecret: return .secondary
         }
-        .padding()
-        .frame(width: 400)
+    }
+
+    // MARK: - CLI Integration
+
+    private func loadSecretFiles() async {
+        let cli = CLIService()
+        guard let result = try? await cli.run(args: ["secret", "list", "--json"], workingDirectory: workspace.path) else {
+            return
+        }
+        guard result.exitCode == 0, let data = result.stdout.data(using: .utf8) else { return }
+
+        struct FileInfo: Decodable {
+            let path: String
+            let format: String
+        }
+
+        guard let files = try? JSONDecoder().decode([FileInfo].self, from: data) else { return }
+        secretFiles = files.map { SecretFile(path: $0.path, formatString: $0.format) }
+    }
+
+    private func loadEntriesForSelection(_ fileID: UUID?) async {
+        errorMessage = nil
+        selectedEntryIDs = []
+
+        guard let fileID, fileID != settingsFileID else {
+            entries = []
+            return
+        }
+        guard let file = secretFiles.first(where: { $0.id == fileID }) else {
+            entries = []
+            return
+        }
+
+        let cli = CLIService()
+        guard let result = try? await cli.run(
+            args: ["secret", "show", file.path, "--json"],
+            workingDirectory: workspace.path
+        ) else {
+            errorMessage = "Failed to run airlock CLI"
+            return
+        }
+
+        if result.exitCode != 0 {
+            errorMessage = result.stderr.isEmpty ? "Failed to parse file" : result.stderr
+            return
+        }
+
+        struct ShowOutput: Decodable {
+            let format: String
+            let entries: [ShowEntry]
+        }
+        struct ShowEntry: Decodable {
+            let path: String
+            let value: String
+            let encrypted: Bool
+        }
+
+        guard let data = result.stdout.data(using: .utf8),
+              let output = try? JSONDecoder().decode(ShowOutput.self, from: data) else {
+            errorMessage = "Failed to parse CLI output"
+            return
+        }
+
+        entries = output.entries.map { e in
+            SecretEntry(
+                path: e.path,
+                value: e.value,
+                encrypted: e.encrypted,
+                source: file.label,
+                isEditable: true
+            )
+        }
+    }
+
+    private func encryptSelected() async {
+        guard let file = selectedFile else { return }
+        let keys = selectedPlaintextEntries.map(\.path).joined(separator: ",")
+        guard !keys.isEmpty else { return }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let cli = CLIService()
+        let result = try? await cli.run(
+            args: ["secret", "encrypt", file.path, "--keys", keys],
+            workingDirectory: workspace.path
+        )
+        if let result, result.exitCode != 0 {
+            errorMessage = result.stderr.isEmpty ? "Encryption failed" : result.stderr
+            return
+        }
+        await loadEntriesForSelection(selectedFileID)
+    }
+
+    private func decryptSelected() async {
+        guard let file = selectedFile else { return }
+        let keys = selectedEncryptedEntries.map(\.path).joined(separator: ",")
+        guard !keys.isEmpty else { return }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let cli = CLIService()
+        let result = try? await cli.run(
+            args: ["secret", "decrypt", file.path, "--keys", keys],
+            workingDirectory: workspace.path
+        )
+        if let result, result.exitCode != 0 {
+            errorMessage = result.stderr.isEmpty ? "Decryption failed" : result.stderr
+            return
+        }
+        await loadEntriesForSelection(selectedFileID)
+    }
+
+    private func removeFile(_ file: SecretFile) async {
+        let cli = CLIService()
+        _ = try? await cli.run(
+            args: ["secret", "remove", file.path],
+            workingDirectory: workspace.path
+        )
+        await loadSecretFiles()
+        if selectedFileID == file.id {
+            selectedFileID = nil
+            entries = []
+        }
+    }
+
+    private var selectedFile: SecretFile? {
+        guard let id = selectedFileID else { return nil }
+        return secretFiles.first { $0.id == id }
     }
 
     private func loadSettingsSecrets() {
@@ -210,7 +356,7 @@ struct SecretsView: View {
             (home + "/.claude/settings.local.json", "global"),
         ]
 
-        var results: [EnvEntry] = []
+        var results: [SecretEntry] = []
         for file in settingsFiles + globalFiles {
             guard let data = try? Data(contentsOf: URL(fileURLWithPath: file.path)),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -219,114 +365,30 @@ struct SecretsView: View {
             let fileName = (file.path as NSString).lastPathComponent
             let source = "\(file.label) \(fileName)"
 
-            // Top-level env block
             if let envBlock = json["env"] as? [String: String] {
                 for (key, value) in envBlock {
-                    results.append(EnvEntry(key: key, value: value, source: source))
+                    results.append(SecretEntry(
+                        path: key, value: value,
+                        encrypted: value.hasPrefix("ENC[age:"),
+                        source: source, isEditable: false
+                    ))
                 }
             }
-            // Per-MCP-server env blocks
             if let mcpServers = json["mcpServers"] as? [String: Any] {
                 for (serverName, serverVal) in mcpServers {
                     if let server = serverVal as? [String: Any],
                        let envBlock = server["env"] as? [String: String] {
                         for (key, value) in envBlock {
-                            results.append(EnvEntry(key: key, value: value, source: "mcp:\(serverName)"))
+                            results.append(SecretEntry(
+                                path: key, value: value,
+                                encrypted: value.hasPrefix("ENC[age:"),
+                                source: "mcp:\(serverName)", isEditable: false
+                            ))
                         }
                     }
                 }
             }
         }
         settingsEntries = results
-    }
-
-    private func loadEnvFile(_ path: String) {
-        do {
-            let content = try String(contentsOfFile: path, encoding: .utf8)
-            rawLines = content.components(separatedBy: .newlines)
-            entries = rawLines.compactMap { line -> EnvEntry? in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return nil }
-                let parts = trimmed.split(separator: "=", maxSplits: 1)
-                guard parts.count == 2 else { return nil }
-                let rawValue = String(parts[1]).trimmingCharacters(in: .whitespaces)
-                let value: String
-                if rawValue.count >= 2,
-                   (rawValue.hasPrefix("'") && rawValue.hasSuffix("'")) ||
-                   (rawValue.hasPrefix("\"") && rawValue.hasSuffix("\"")) {
-                    value = String(rawValue.dropFirst().dropLast())
-                } else {
-                    value = rawValue
-                }
-                return EnvEntry(
-                    key: String(parts[0]).trimmingCharacters(in: .whitespaces),
-                    value: value
-                )
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func encryptAll() {
-        guard let envFile = workspace.envFilePath else { return }
-        Task { @MainActor in
-            let cli = CLIService()
-            let result = try? await cli.run(
-                args: ["encrypt", envFile, "-o", envFile],
-                workingDirectory: workspace.path
-            )
-            if let result, result.exitCode != 0 {
-                errorMessage = result.stderr.isEmpty ? "Encryption failed" : result.stderr
-            }
-            loadEnvFile(envFile)
-        }
-    }
-
-    private func saveEntries() {
-        guard let envFile = workspace.envFilePath else { return }
-
-        // Build lookup of current entries by key
-        var entryMap: [String: String] = [:]
-        for entry in entries {
-            entryMap[entry.key] = entry.value
-        }
-
-        // Rebuild file preserving comments and blank lines
-        var outputLines: [String] = []
-        var writtenKeys: Set<String> = []
-
-        for line in rawLines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") {
-                outputLines.append(line)
-                continue
-            }
-            let parts = trimmed.split(separator: "=", maxSplits: 1)
-            if parts.count == 2 {
-                let key = String(parts[0]).trimmingCharacters(in: .whitespaces)
-                if let value = entryMap[key] {
-                    outputLines.append("\(key)=\(value)")
-                    writtenKeys.insert(key)
-                } else {
-                    outputLines.append(line)
-                }
-            } else {
-                outputLines.append(line)
-            }
-        }
-
-        // Append new entries not in original file
-        for entry in entries where !writtenKeys.contains(entry.key) {
-            outputLines.append("\(entry.key)=\(entry.value)")
-        }
-
-        let content = outputLines.joined(separator: "\n")
-        do {
-            try content.write(toFile: envFile, atomically: true, encoding: .utf8)
-            rawLines = outputLines
-        } catch {
-            errorMessage = "Failed to save: \(error.localizedDescription)"
-        }
     }
 }

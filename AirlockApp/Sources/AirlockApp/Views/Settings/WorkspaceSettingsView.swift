@@ -9,10 +9,19 @@ struct WorkspaceSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Environment") {
+            Section("Secrets") {
                 HStack {
-                    TextField(".env file path", text: stringBinding(\.envFilePath))
-                    Button("Browse...") { pickEnvFile() }
+                    Text("Manage secret files in the Secrets tab (Cmd+2)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                if let envPath = workspace.envFilePath {
+                    HStack {
+                        Text("Legacy .env: \((envPath as NSString).lastPathComponent)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -107,15 +116,4 @@ struct WorkspaceSettingsView: View {
         )
     }
 
-    private func pickEnvFile() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        if panel.runModal() == .OK, let url = panel.url {
-            if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
-                appState.workspaces[idx].envFilePath = url.path
-                try? WorkspaceStore().saveWorkspaces(appState.workspaces)
-            }
-        }
-    }
 }
