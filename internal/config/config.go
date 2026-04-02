@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/taeikkim92/airlock/internal/fsutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -42,36 +43,7 @@ func Save(cfg Config, airlockDir string) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 	configPath := filepath.Join(airlockDir, "config.yaml")
-	return atomicWrite(configPath, data, 0o600)
-}
-
-// atomicWrite writes data to a file atomically by writing to a temp file
-// in the same directory and then renaming.
-func atomicWrite(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".airlock-tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("write temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("close temp file: %w", err)
-	}
-	if err := os.Chmod(tmpPath, perm); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("chmod temp file: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("rename temp file: %w", err)
-	}
-	return nil
+	return fsutil.AtomicWrite(configPath, data, 0o600)
 }
 
 func Load(airlockDir string) (Config, error) {

@@ -18,14 +18,10 @@ var secretShowCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		filePath := args[0]
 
-		var format secrets.FileFormat
-		if secretShowFormat != "" {
-			format = secrets.FileFormat(secretShowFormat)
-		} else {
-			format = secrets.DetectFormat(filePath)
+		format, parser, err := secrets.ResolveParser(filePath, secretShowFormat)
+		if err != nil {
+			return err
 		}
-
-		parser := secrets.ParserFor(format)
 		entries, err := parser.Parse(filePath)
 		if err != nil {
 			return fmt.Errorf("parse: %w", err)

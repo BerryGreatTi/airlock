@@ -6,7 +6,7 @@ enum SecretFileFormat: String, Codable, CaseIterable {
     case yaml
     case ini
     case properties
-    case plaintext
+    case text
 
     var displayName: String {
         switch self {
@@ -15,7 +15,7 @@ enum SecretFileFormat: String, Codable, CaseIterable {
         case .yaml: return "YAML"
         case .ini: return "INI"
         case .properties: return "Properties"
-        case .plaintext: return "Plain Text"
+        case .text: return "Plain Text"
         }
     }
 
@@ -26,7 +26,7 @@ enum SecretFileFormat: String, Codable, CaseIterable {
         case .yaml: return "list.bullet.indent"
         case .ini: return "gearshape"
         case .properties: return "list.dash"
-        case .plaintext: return "lock.doc"
+        case .text: return "lock.doc"
         }
     }
 
@@ -42,7 +42,7 @@ enum SecretFileFormat: String, Codable, CaseIterable {
         case "yaml", "yml": return .yaml
         case "ini", "cfg": return .ini
         case "properties": return .properties
-        default: return .plaintext
+        default: return .text
         }
     }
 }

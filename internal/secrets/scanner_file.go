@@ -64,7 +64,6 @@ func (s *FileScanner) ContainsPath(path string) bool {
 }
 
 func (s *FileScanner) processFile(fc config.SecretFileConfig, opts ScanOpts, index int) ([]ShadowMount, map[string]string, error) {
-	// Detect format from config or file extension.
 	format := detectFileFormat(fc)
 
 	parser := ParserFor(format)
@@ -73,7 +72,6 @@ func (s *FileScanner) processFile(fc config.SecretFileConfig, opts ScanOpts, ind
 		return nil, nil, fmt.Errorf("parse: %w", err)
 	}
 
-	// Build keys set from config; nil means encrypt all.
 	var keys map[string]bool
 	if len(fc.EncryptKeys) > 0 {
 		keys = make(map[string]bool, len(fc.EncryptKeys))
@@ -146,17 +144,9 @@ func (s *FileScanner) containerPath(hostPath string, opts ScanOpts, index int) (
 	return fmt.Sprintf("/run/airlock/files/%d-%s", index, filepath.Base(hostPath)), nil
 }
 
-// detectFileFormat determines the FileFormat from config or auto-detection.
 func detectFileFormat(fc config.SecretFileConfig) FileFormat {
 	if fc.Format != "" {
-		switch strings.ToLower(fc.Format) {
-		case "json":
-			return FormatJSON
-		case "dotenv":
-			return FormatDotenv
-		default:
-			return FileFormat(strings.ToLower(fc.Format))
-		}
+		return FileFormat(strings.ToLower(fc.Format))
 	}
 	return DetectFormat(fc.Path)
 }

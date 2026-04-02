@@ -97,13 +97,11 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 		scanners := []secrets.Scanner{
 			secrets.NewClaudeScanner(),
 		}
-		// Add FileScanner for registered secret files from config
 		var fileScanner *secrets.FileScanner
 		if len(cfg.SecretFiles) > 0 {
 			fileScanner = secrets.NewFileScanner(cfg.SecretFiles, workspace)
 			scanners = append(scanners, fileScanner)
 		}
-		// Add EnvScanner if --env provided and not already in FileScanner
 		if envFile != "" && (fileScanner == nil || !fileScanner.ContainsPath(envFile)) {
 			scanners = append(scanners, secrets.NewEnvScanner(envFile, workspace))
 		}

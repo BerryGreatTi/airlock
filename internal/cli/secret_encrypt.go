@@ -32,16 +32,10 @@ func RunSecretEncrypt(filePath, mode, formatOverride, keysDir, airlockDir string
 		return fmt.Errorf("resolve path: %w", err)
 	}
 
-	var format secrets.FileFormat
-	if formatOverride != "" {
-		format = secrets.FileFormat(formatOverride)
-		if err := secrets.ValidateFormat(format); err != nil {
-			return err
-		}
-	} else {
-		format = secrets.DetectFormat(absPath)
+	_, parser, err := secrets.ResolveParser(absPath, formatOverride)
+	if err != nil {
+		return err
 	}
-	parser := secrets.ParserFor(format)
 
 	entries, err := parser.Parse(absPath)
 	if err != nil {
@@ -79,7 +73,6 @@ func RunSecretEncrypt(filePath, mode, formatOverride, keysDir, airlockDir string
 		return fmt.Errorf("write: %w", err)
 	}
 
-	// Update config with encrypt_keys
 	cfg, loadErr := config.Load(airlockDir)
 	if loadErr == nil && keySet != nil {
 		for i, f := range cfg.SecretFiles {

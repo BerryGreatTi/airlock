@@ -4,14 +4,6 @@ enum SecretStatus: String {
     case encrypted = "Encrypted"
     case plaintext = "Plaintext"
     case notSecret = "Not Secret"
-
-    var color: String {
-        switch self {
-        case .encrypted: return "green"
-        case .plaintext: return "orange"
-        case .notSecret: return "secondary"
-        }
-    }
 }
 
 struct SecretEntry: Identifiable {

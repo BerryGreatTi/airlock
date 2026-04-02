@@ -18,17 +18,10 @@ func RunSecretAdd(filePath, formatOverride, airlockDir string) error {
 		return fmt.Errorf("resolve path: %w", err)
 	}
 
-	var format secrets.FileFormat
-	if formatOverride != "" {
-		format = secrets.FileFormat(formatOverride)
-		if err := secrets.ValidateFormat(format); err != nil {
-			return err
-		}
-	} else {
-		format = secrets.DetectFormat(absPath)
+	format, parser, err := secrets.ResolveParser(absPath, formatOverride)
+	if err != nil {
+		return err
 	}
-
-	parser := secrets.ParserFor(format)
 	entries, err := parser.Parse(absPath)
 	if err != nil {
 		return fmt.Errorf("parse file: %w", err)
