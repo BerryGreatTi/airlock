@@ -3,6 +3,7 @@ package secrets
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/ini.v1"
@@ -47,7 +48,7 @@ func (p *INIParser) Write(path string, entries []SecretEntry) error {
 		}
 	}
 	// Write to temp file then rename for atomic write
-	dir := fileDir(path)
+	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".airlock-tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
@@ -70,11 +71,3 @@ func (p *INIParser) Write(path string, entries []SecretEntry) error {
 	return nil
 }
 
-func fileDir(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' {
-			return path[:i]
-		}
-	}
-	return "."
-}
