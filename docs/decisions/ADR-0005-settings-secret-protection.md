@@ -87,3 +87,7 @@ Most accurate but high friction. Users would need to tag each secret in their se
 ### Copy entire ~/.claude/ directory to tmpDir
 
 Would avoid file-level shadow mounts but requires copying the entire directory (potentially large with plugin caches). Shadow mounts are more efficient and more precise.
+
+## Revision (2026-04-02)
+
+The Scanner pipeline has been extended with a third scanner type: `FileScanner`. This scanner handles user-registered secret files in 6 formats (dotenv, JSON, YAML, INI, properties, plain text) configured in `.airlock/config.yaml`. It implements the same `Scanner` interface alongside `EnvScanner` and `ClaudeScanner`. See [ADR-0008](ADR-0008-multi-format-secrets.md) for the full design.

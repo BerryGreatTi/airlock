@@ -35,6 +35,7 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 | [ADR-0005](decisions/ADR-0005-settings-secret-protection.md) | Settings secret protection with modular Scanner pipeline | Accepted |
 | [ADR-0006](decisions/ADR-0006-writable-claude-volume.md) | Writable .claude volume for persistent container state | Accepted |
 | [ADR-0007](decisions/ADR-0007-gui-theme-terminal-settings.md) | GUI theme switching, terminal settings, and Diff removal | Accepted |
+| [ADR-0008](decisions/ADR-0008-multi-format-secrets.md) | Multi-format secret file management | Accepted |
 
 ## Guides Index
 

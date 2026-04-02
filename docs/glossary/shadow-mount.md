@@ -21,4 +21,12 @@ Key properties:
 - **Ephemeral**: Shadow files live in a temporary directory on the host. They are created fresh on each `run`/`start` and deleted when the session ends.
 - **Scope limitation**: Only files that were scanned and found to contain secrets are shadowed. Other files in the same directory (e.g., `history.jsonl`, session data) are not affected by shadow mounts and remain accessible in their original form.
 
-See [ADR-0005](../decisions/ADR-0005-settings-secret-protection.md) for the Scanner pipeline design and [ADR-0006](../decisions/ADR-0006-writable-claude-volume.md) for how shadow mounts interact with the writable volume.
+Shadow mounts are produced by three scanner types:
+
+- **ClaudeScanner** -- shadows `~/.claude/settings.json` and project-level settings
+- **EnvScanner** -- shadows `.env` files (via `--env` flag)
+- **FileScanner** -- shadows any user-registered secret file (JSON, YAML, INI, properties, text) configured in `.airlock/config.yaml`
+
+For files outside the workspace, `FileScanner` mounts to `/run/airlock/files/<index>-<filename>` instead of a workspace-relative path.
+
+See [ADR-0005](../decisions/ADR-0005-settings-secret-protection.md) for the Scanner pipeline design, [ADR-0008](../decisions/ADR-0008-multi-format-secrets.md) for multi-format support, and [ADR-0006](../decisions/ADR-0006-writable-claude-volume.md) for how shadow mounts interact with the writable volume.
