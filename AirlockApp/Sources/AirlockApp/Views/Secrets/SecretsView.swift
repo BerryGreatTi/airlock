@@ -47,6 +47,26 @@ struct SecretsView: View {
                 Task { await loadSecretFiles() }
             }
         }
+        .alert("File contains encrypted values",
+               isPresented: $showRemoveWarning,
+               presenting: fileToRemove) { file in
+            Button("Decrypt & Remove") {
+                Task {
+                    let cli = CLIService()
+                    _ = try? await cli.run(
+                        args: ["secret", "decrypt", file.path, "--all"],
+                        workingDirectory: workspace.path
+                    )
+                    await removeFile(file)
+                }
+            }
+            Button("Remove Anyway", role: .destructive) {
+                Task { await removeFile(file) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { file in
+            Text("'\(file.label)' has encrypted values. Removing without decrypting means values stay as ENC[age:...] ciphertext. Decrypt first?")
+        }
     }
 
     private var restartBanner: some View {
@@ -77,7 +97,7 @@ struct SecretsView: View {
                         .tag(file.id)
                         .contextMenu {
                             Button("Remove", role: .destructive) {
-                                Task { await removeFile(file) }
+                                confirmRemoveFile(file)
                             }
                         }
                     }
@@ -331,6 +351,39 @@ struct SecretsView: View {
             return
         }
         await loadEntriesForSelection(selectedFileID)
+    }
+
+    @State private var fileToRemove: SecretFile?
+    @State private var showRemoveWarning = false
+
+    private func confirmRemoveFile(_ file: SecretFile) {
+        Task {
+            let hasEncrypted = await checkFileHasEncrypted(file)
+            if hasEncrypted {
+                fileToRemove = file
+                showRemoveWarning = true
+            } else {
+                await removeFile(file)
+            }
+        }
+    }
+
+    private func checkFileHasEncrypted(_ file: SecretFile) async -> Bool {
+        let cli = CLIService()
+        guard let result = try? await cli.run(
+            args: ["secret", "show", file.path, "--json"],
+            workingDirectory: workspace.path
+        ), result.exitCode == 0 else { return false }
+
+        struct QuickCheck: Decodable {
+            let entries: [QuickEntry]
+        }
+        struct QuickEntry: Decodable {
+            let encrypted: Bool
+        }
+        guard let data = result.stdout.data(using: .utf8),
+              let output = try? JSONDecoder().decode(QuickCheck.self, from: data) else { return false }
+        return output.entries.contains { $0.encrypted }
     }
 
     private func removeFile(_ file: SecretFile) async {

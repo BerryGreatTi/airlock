@@ -100,6 +100,7 @@ func RunSecretEncrypt(filePath, mode, formatOverride, keysDir, airlockDir string
 		encCount = len(keySet)
 	}
 	fmt.Printf("Encrypted %d keys in %s\n", encCount, filepath.Base(absPath))
+	fmt.Println("Note: values are encrypted in-place. Deleting this file means losing the plaintext. Use 'airlock secret decrypt' to restore.")
 	return nil
 }
 

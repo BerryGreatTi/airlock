@@ -47,6 +47,7 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - `*.age` and `*.key` files are gitignored for the same reason
 - `mapping.json` (encrypted-to-plaintext mapping) is gitignored -- it exists only at runtime
 - The `ENC[age:...]` wrapper pattern is the contract between the agent container and the proxy. Changing the pattern format breaks decryption.
+- `airlock secret encrypt` modifies files in-place. Deleting an encrypted file without `airlock secret decrypt` first means permanent plaintext loss. The proxy mapping is ephemeral (session-only).
 - Version is injected at build time via `LDFLAGS` -- `cli.Version` defaults to `"dev"` if not set
 - SwiftTerm's `startProcess` has no `currentDirectory` parameter -- the GUI uses `bash -c "cd <path> && exec airlock run"` as a workaround
 - SwiftTerm delegate methods use `SwiftTerm.TerminalView` (not `LocalProcessTerminalView`) as the `source` parameter type for `hostCurrentDirectoryUpdate` and `processTerminated`
