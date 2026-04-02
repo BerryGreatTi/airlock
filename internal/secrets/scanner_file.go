@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -86,9 +87,19 @@ func (s *FileScanner) processFile(fc config.SecretFileConfig, opts ScanOpts, ind
 		return nil, nil, fmt.Errorf("encrypt: %w", err)
 	}
 
-	// Write encrypted entries to tmpDir.
+	// Copy original file to tmpDir so parsers that do read-and-update-in-place
+	// (YAML for comment preservation, JSON for non-string value preservation)
+	// can find the original structure.
 	baseName := filepath.Base(fc.Path)
 	tmpPath := filepath.Join(opts.TmpDir, fmt.Sprintf("file-%d-%s", index, baseName))
+	origData, err := os.ReadFile(fc.Path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read original for copy: %w", err)
+	}
+	if err := os.WriteFile(tmpPath, origData, 0644); err != nil {
+		return nil, nil, fmt.Errorf("copy to tmpdir: %w", err)
+	}
+
 	if err := parser.Write(tmpPath, encrypted); err != nil {
 		return nil, nil, fmt.Errorf("write encrypted: %w", err)
 	}

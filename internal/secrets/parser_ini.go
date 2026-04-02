@@ -1,9 +1,8 @@
 package secrets
 
 import (
+	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"gopkg.in/ini.v1"
@@ -47,27 +46,10 @@ func (p *INIParser) Write(path string, entries []SecretEntry) error {
 			cfg.Section(parts[0]).Key(parts[1]).SetValue(e.Value)
 		}
 	}
-	// Write to temp file then rename for atomic write
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".airlock-tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
+	var buf bytes.Buffer
+	if _, err := cfg.WriteTo(&buf); err != nil {
+		return fmt.Errorf("marshal ini: %w", err)
 	}
-	tmpPath := tmp.Name()
-	tmp.Close()
-
-	if err := cfg.SaveTo(tmpPath); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("save ini: %w", err)
-	}
-	if err := os.Chmod(tmpPath, 0644); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("chmod: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("rename: %w", err)
-	}
-	return nil
+	return AtomicWrite(path, buf.Bytes(), 0644)
 }
 

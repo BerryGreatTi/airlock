@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -111,8 +112,8 @@ func updateYAMLNode(prefix string, node *yaml.Node, entryMap map[string]string) 
 	case yaml.ScalarNode:
 		if newVal, ok := entryMap[prefix]; ok {
 			node.Value = newVal
-			// Ensure ENC values are quoted in YAML
-			if len(newVal) > 0 && (newVal[0] == 'E' || newVal[0] == '{' || newVal[0] == '[') {
+			// Ensure ENC values and YAML-special characters are quoted
+			if strings.HasPrefix(newVal, "ENC[age:") || (len(newVal) > 0 && (newVal[0] == '{' || newVal[0] == '[')) {
 				node.Style = yaml.DoubleQuotedStyle
 			}
 		}

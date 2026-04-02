@@ -56,22 +56,85 @@ func flattenJSON(prefix string, v interface{}, entries *[]SecretEntry) {
 }
 
 func (p *JSONParser) Write(path string, entries []SecretEntry) error {
+	// Build entry map for lookup
+	entryMap := make(map[string]string, len(entries))
+	for _, e := range entries {
+		entryMap[e.Path] = e.Value
+	}
+
+	// Read original file to preserve non-string values (numbers, booleans, nulls)
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read json for write: %w", err)
+	}
+
+	if err == nil {
+		// Update string values in the original structure
+		var root interface{}
+		if err := json.Unmarshal(data, &root); err != nil {
+			return fmt.Errorf("parse json for write: %w", err)
+		}
+		updateJSON("", root, entryMap)
+		out, err := json.MarshalIndent(root, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal json: %w", err)
+		}
+		out = append(out, '\n')
+		return AtomicWrite(path, out, 0644)
+	}
+
+	// No existing file -- rebuild from entries only (string values)
 	root := rebuildJSON(entries)
-	data, err := json.MarshalIndent(root, "", "  ")
+	out, err := json.MarshalIndent(root, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal json: %w", err)
 	}
-	data = append(data, '\n')
-	return AtomicWrite(path, data, 0644)
+	out = append(out, '\n')
+	return AtomicWrite(path, out, 0644)
+}
+
+// updateJSON updates string values in the parsed JSON tree using the entry map.
+func updateJSON(prefix string, v interface{}, entryMap map[string]string) {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		for k, child := range val {
+			path := k
+			if prefix != "" {
+				path = prefix + "/" + k
+			}
+			if s, ok := child.(string); ok {
+				if newVal, found := entryMap[path]; found && newVal != s {
+					val[k] = newVal
+				}
+			} else {
+				updateJSON(path, child, entryMap)
+			}
+		}
+	case []interface{}:
+		for i, child := range val {
+			path := strconv.Itoa(i)
+			if prefix != "" {
+				path = prefix + "/" + path
+			}
+			if s, ok := child.(string); ok {
+				if newVal, found := entryMap[path]; found && newVal != s {
+					val[i] = newVal
+				}
+			} else {
+				updateJSON(path, child, entryMap)
+			}
+		}
+	}
 }
 
 // rebuildJSON reconstructs a nested JSON structure from flat SecretEntry paths.
+// Used only when no original file exists.
 func rebuildJSON(entries []SecretEntry) interface{} {
 	root := make(map[string]interface{})
 	for _, e := range entries {
 		setNestedJSON(root, strings.Split(e.Path, "/"), e.Value)
 	}
-	return simplifyJSON(root)
+	return root
 }
 
 func setNestedJSON(node map[string]interface{}, parts []string, value string) {
@@ -80,52 +143,10 @@ func setNestedJSON(node map[string]interface{}, parts []string, value string) {
 		return
 	}
 	key := parts[0]
-	next := parts[1]
-	if _, isIdx := strconv.Atoi(next); isIdx == nil {
-		// Next segment is an array index
-		arr, ok := node[key].([]interface{})
-		if !ok {
-			arr = []interface{}{}
-		}
-		idx, _ := strconv.Atoi(next)
-		for len(arr) <= idx {
-			arr = append(arr, make(map[string]interface{}))
-		}
-		if len(parts) == 2 {
-			arr[idx] = value
-		} else {
-			child, ok := arr[idx].(map[string]interface{})
-			if !ok {
-				child = make(map[string]interface{})
-				arr[idx] = child
-			}
-			setNestedJSON(child, parts[2:], value)
-		}
-		node[key] = arr
-	} else {
-		child, ok := node[key].(map[string]interface{})
-		if !ok {
-			child = make(map[string]interface{})
-			node[key] = child
-		}
-		setNestedJSON(child, parts[1:], value)
+	child, ok := node[key].(map[string]interface{})
+	if !ok {
+		child = make(map[string]interface{})
+		node[key] = child
 	}
-}
-
-// simplifyJSON converts numeric-keyed maps to arrays where appropriate.
-func simplifyJSON(v interface{}) interface{} {
-	switch val := v.(type) {
-	case map[string]interface{}:
-		for k, child := range val {
-			val[k] = simplifyJSON(child)
-		}
-		return val
-	case []interface{}:
-		for i, child := range val {
-			val[i] = simplifyJSON(child)
-		}
-		return val
-	default:
-		return v
-	}
+	setNestedJSON(child, parts[1:], value)
 }

@@ -240,6 +240,7 @@ func TestIntegrationINIPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
+	tmpDir := t.TempDir()
 
 	iniContent := "[default]\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\naws_secret_access_key = wJalrXUtnFEMI_K7MDENG\n"
 	iniPath := filepath.Join(workspace, "credentials.ini")
@@ -261,6 +262,111 @@ func TestIntegrationINIPipeline(t *testing.T) {
 	data, _ := os.ReadFile(iniPath)
 	if !strings.Contains(string(data), "ENC[age:") {
 		t.Error("INI should contain ENC token")
+	}
+
+	// Scan via FileScanner
+	scanner := NewFileScanner([]config.SecretFileConfig{
+		{Path: iniPath, Format: "ini", EncryptKeys: []string{"default/aws_secret_access_key"}},
+	}, workspace)
+	result, err := scanner.Scan(ScanOpts{
+		Workspace: workspace, PublicKey: kp.PublicKey, PrivateKey: kp.PrivateKey, TmpDir: tmpDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Mapping) != 1 {
+		t.Fatalf("expected 1 mapping, got %d", len(result.Mapping))
+	}
+
+	// Decrypt round-trip
+	encEntries, _ := parser.Parse(iniPath)
+	decrypted := make([]SecretEntry, len(encEntries))
+	for i, e := range encEntries {
+		if crypto.IsEncrypted(e.Value) {
+			inner, _ := crypto.UnwrapENC(e.Value)
+			plain, _ := crypto.Decrypt(inner, kp.PrivateKey)
+			decrypted[i] = SecretEntry{Path: e.Path, Value: plain}
+		} else {
+			decrypted[i] = e
+		}
+	}
+	parser.Write(iniPath, decrypted)
+
+	final, _ := parser.Parse(iniPath)
+	found := map[string]string{}
+	for _, e := range final {
+		found[e.Path] = e.Value
+	}
+	if found["default/aws_secret_access_key"] != "wJalrXUtnFEMI_K7MDENG" {
+		t.Errorf("INI round-trip failed: %q", found["default/aws_secret_access_key"])
+	}
+}
+
+func TestIntegrationPropertiesPipeline(t *testing.T) {
+	kp, err := crypto.GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := t.TempDir()
+	tmpDir := t.TempDir()
+
+	propContent := "spring.datasource.password=db_secret_123\nspring.datasource.url=jdbc:postgresql://localhost/mydb\n"
+	propPath := filepath.Join(workspace, "application.properties")
+	os.WriteFile(propPath, []byte(propContent), 0644)
+
+	parser := ParserFor(FormatProperties)
+	entries, err := parser.Parse(propPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keys := map[string]bool{"spring.datasource.password": true}
+	encrypted, _, err := EncryptSelected(entries, keys, kp.PublicKey, kp.PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parser.Write(propPath, encrypted)
+
+	data, _ := os.ReadFile(propPath)
+	if !strings.Contains(string(data), "ENC[age:") {
+		t.Error("properties should contain ENC token")
+	}
+
+	// Scan via FileScanner
+	scanner := NewFileScanner([]config.SecretFileConfig{
+		{Path: propPath, Format: "properties", EncryptKeys: []string{"spring.datasource.password"}},
+	}, workspace)
+	result, err := scanner.Scan(ScanOpts{
+		Workspace: workspace, PublicKey: kp.PublicKey, PrivateKey: kp.PrivateKey, TmpDir: tmpDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Mapping) != 1 {
+		t.Fatalf("expected 1 mapping, got %d", len(result.Mapping))
+	}
+
+	// Decrypt round-trip
+	encEntries, _ := parser.Parse(propPath)
+	decrypted := make([]SecretEntry, len(encEntries))
+	for i, e := range encEntries {
+		if crypto.IsEncrypted(e.Value) {
+			inner, _ := crypto.UnwrapENC(e.Value)
+			plain, _ := crypto.Decrypt(inner, kp.PrivateKey)
+			decrypted[i] = SecretEntry{Path: e.Path, Value: plain}
+		} else {
+			decrypted[i] = e
+		}
+	}
+	parser.Write(propPath, decrypted)
+
+	final, _ := parser.Parse(propPath)
+	found := map[string]string{}
+	for _, e := range final {
+		found[e.Path] = e.Value
+	}
+	if found["spring.datasource.password"] != "db_secret_123" {
+		t.Errorf("properties round-trip failed: %q", found["spring.datasource.password"])
 	}
 }
 

@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	secretDecryptKeys string
-	secretDecryptAll  bool
+	secretDecryptKeys  string
+	secretDecryptAll   bool
+	secretDecryptFormat string
 )
 
 var secretDecryptCmd = &cobra.Command{
@@ -34,7 +35,12 @@ var secretDecryptCmd = &cobra.Command{
 			return fmt.Errorf("resolve path: %w", err)
 		}
 
-		format := secrets.DetectFormat(absPath)
+		var format secrets.FileFormat
+		if secretDecryptFormat != "" {
+			format = secrets.FileFormat(secretDecryptFormat)
+		} else {
+			format = secrets.DetectFormat(absPath)
+		}
 		parser := secrets.ParserFor(format)
 
 		entries, err := parser.Parse(absPath)
@@ -88,5 +94,6 @@ var secretDecryptCmd = &cobra.Command{
 func init() {
 	secretDecryptCmd.Flags().StringVar(&secretDecryptKeys, "keys", "", "comma-separated key paths to decrypt")
 	secretDecryptCmd.Flags().BoolVar(&secretDecryptAll, "all", false, "decrypt all entries")
+	secretDecryptCmd.Flags().StringVar(&secretDecryptFormat, "format", "", "file format override")
 	secretCmd.AddCommand(secretDecryptCmd)
 }

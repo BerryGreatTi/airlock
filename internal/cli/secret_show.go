@@ -62,6 +62,7 @@ type showEntry struct {
 	Path      string `json:"path"`
 	Value     string `json:"value"`
 	Encrypted bool   `json:"encrypted"`
+	IsSecret  bool   `json:"is_secret"`
 }
 
 func showJSON(format secrets.FileFormat, entries []secrets.SecretEntry) error {
@@ -81,6 +82,7 @@ func showJSON(format secrets.FileFormat, entries []secrets.SecretEntry) error {
 			Path:      e.Path,
 			Value:     value,
 			Encrypted: e.Encrypted,
+			IsSecret:  e.Encrypted || secrets.IsSecret(secrets.LeafKey(e.Path), e.Value),
 		}
 	}
 	data, err := json.MarshalIndent(out, "", "  ")
