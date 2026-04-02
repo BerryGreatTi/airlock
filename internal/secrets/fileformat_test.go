@@ -16,6 +16,8 @@ func TestDetectFormat(t *testing.T) {
 		{".env.production", FormatDotenv},
 		{"/path/to/.env", FormatDotenv},
 		{"/path/to/.env.staging", FormatDotenv},
+		{"secrets.env", FormatDotenv},
+		{"/path/to/myapp.env", FormatDotenv},
 		{"config.json", FormatJSON},
 		{"/home/user/credentials.json", FormatJSON},
 		{"secrets.yaml", FormatYAML},

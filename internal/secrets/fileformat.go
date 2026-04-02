@@ -45,8 +45,8 @@ func DetectFormat(path string) FileFormat {
 	base := filepath.Base(path)
 	ext := strings.ToLower(filepath.Ext(base))
 
-	// Handle .env and .env.* patterns
-	if base == ".env" || strings.HasPrefix(base, ".env.") {
+	// Handle .env and .env.* patterns, and files with .env extension
+	if base == ".env" || strings.HasPrefix(base, ".env.") || ext == ".env" {
 		return FormatDotenv
 	}
 
