@@ -59,6 +59,7 @@ struct ContentView: View {
                 Divider()
                 tabContent(workspace: workspace)
             }
+            .id(workspace.id)
         } else {
             ContentUnavailableView {
                 Label("No Workspace Selected", systemImage: "sidebar.left")
