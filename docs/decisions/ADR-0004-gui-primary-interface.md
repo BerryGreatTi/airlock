@@ -264,3 +264,40 @@ OAuth workaround: users can authenticate via `claude auth login` inside the cont
 | 6 | Hint text updated | PASS |
 | 7 | Claude Code execution | BLOCKED (#15) |
 | 8 | Claude Code settings parity | BLOCKED (#15) |
+
+## Revision (2026-04-03): Workspace switching fix and terminal persistence -- PR #20
+
+Workspace switching was broken: clicking a different workspace in the sidebar did not update the detail panel. SwiftUI's `NavigationSplitView` reused the same view hierarchy across selection changes, causing stale state in terminal, secrets, containers, and settings tabs.
+
+### Architectural changes
+
+1. **Terminal persistence via ForEach layer.** Terminal views are rendered in a `ForEach(appState.workspaces)` layer outside the `.id()` scope. Each workspace gets its own persistent `TerminalSplitView`, shown/hidden via opacity based on `selectedWorkspaceID`. This preserves running docker exec sessions, split pane configuration, and scroll history across workspace switches. Previously (ADR-0004 revision 2026-03-27), terminal persistence was only maintained across tab switches via opacity -- workspace switches destroyed the terminal entirely.
+
+2. **Non-terminal tabs rebuild via `.id(workspace.id)`.** Secrets, Containers, and Settings tabs are wrapped in `.id(workspace.id)`, forcing SwiftUI to tear down and rebuild these views on workspace switch. This guarantees no stale secret files, log streams, or settings values leak between workspaces.
+
+3. **Coordinator deinit with `terminate()`.** `NSSplitViewRepresentable.Coordinator` now has a `deinit` that calls `terminal.terminate()` on all terminals before nilling `processDelegate`. This sends SIGTERM to docker exec processes, preventing orphaned shell sessions when a workspace is removed.
+
+4. **Proxy log stream hardening.** `ContainerStatusView.stopLogStream()` now calls `closeFile()` on the pipe's file handle before terminating the process, eliminating a race condition where `readabilityHandler` callbacks could fire after view teardown. `startLogStream()` gained a `guard logProcess == nil` double-start guard.
+
+### Bugs fixed
+
+| Fix | Files | Root cause |
+|-----|-------|------------|
+| Detail panel not updating on workspace switch | ContentView.swift | `NavigationSplitView` reused view hierarchy; fixed with `.id(workspace.id)` on non-terminal content |
+| Terminal session destroyed on workspace switch | ContentView.swift | Terminal was inside `.id()` scope; moved to `ForEach`-based persistence layer |
+| Settings text fields revert on keystroke | WorkspaceSettingsView.swift | `stringBinding`/`portBinding` getters captured stale `let workspace` by value; fixed to read from `appState.workspaces` |
+| Docker exec process leak on workspace removal | NSSplitViewRepresentable.swift | No `deinit` on Coordinator; added `terminate()` + nil `processDelegate` |
+| Proxy log stream race on rapid switch | ContainerStatusView.swift | `readabilityHandler` could fire after teardown; added `closeFile()` + double-start guard |
+
+### Verification results
+
+| # | Test | Result |
+|---|------|--------|
+| 1 | Basic workspace switch updates detail panel | PASS |
+| 2 | Secrets tab refreshes on workspace switch | PASS |
+| 3 | Containers tab resets log stream on switch | PASS |
+| 4 | Settings tab shows correct workspace on switch | PASS |
+| 5 | Rapid switching A -> B -> C | PASS |
+| 6 | Switch from active to inactive (terminal persists on return) | PASS |
+| 7 | Switch during workspace activation | PASS |
+| 8 | Terminal panes persist across workspace switches | PASS |
