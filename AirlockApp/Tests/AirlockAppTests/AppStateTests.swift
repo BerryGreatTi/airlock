@@ -138,9 +138,48 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(state.selectedWorkspace)
     }
 
-    func testSwitchTabIsImmediate() {
+    func testSwitchWorkspaceDuringActivation() {
         let state = AppState()
-        // Direct assignment (used by sidebar activateWorkspace) should be instant
+        let ws1 = Workspace(name: "a", path: "/a")
+        let ws2 = Workspace(name: "b", path: "/b")
+        state.workspaces = [ws1, ws2]
+        state.activationStates[ws1.id] = .activating
+
+        state.selectedWorkspaceID = ws1.id
+        XCTAssertTrue(state.isActivating(ws1))
+
+        // Switch away while ws1 is still activating
+        state.selectedWorkspaceID = ws2.id
+        XCTAssertEqual(state.selectedWorkspace?.name, "b")
+        // ws1 activation state must be preserved
+        XCTAssertTrue(state.isActivating(ws1))
+        XCTAssertEqual(state.activationState(for: ws2), .inactive)
+    }
+
+    func testRapidWorkspaceSwitching() {
+        let state = AppState()
+        let ws1 = Workspace(name: "a", path: "/a")
+        let ws2 = Workspace(name: "b", path: "/b")
+        let ws3 = Workspace(name: "c", path: "/c")
+        state.workspaces = [ws1, ws2, ws3]
+        state.activationStates[ws1.id] = .active
+        state.activationStates[ws2.id] = .activating
+        state.activationStates[ws3.id] = .inactive
+
+        // Rapid switch: A -> B -> C
+        state.selectedWorkspaceID = ws1.id
+        state.selectedWorkspaceID = ws2.id
+        state.selectedWorkspaceID = ws3.id
+        XCTAssertEqual(state.selectedWorkspace?.name, "c")
+
+        // All activation states preserved through rapid switching
+        XCTAssertEqual(state.activationState(for: ws1), .active)
+        XCTAssertEqual(state.activationState(for: ws2), .activating)
+        XCTAssertEqual(state.activationState(for: ws3), .inactive)
+    }
+
+    func testDirectTabAssignment() {
+        let state = AppState()
         state.selectedTab = .secrets
         XCTAssertEqual(state.selectedTab, .secrets)
         state.selectedTab = .terminal

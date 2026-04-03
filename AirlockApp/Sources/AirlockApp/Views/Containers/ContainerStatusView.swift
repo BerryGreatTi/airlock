@@ -208,6 +208,7 @@ struct ContainerStatusView: View {
     @State private var logPipe: Pipe?
 
     private func startLogStream() {
+        guard logProcess == nil else { return }
         guard let dockerPath = CLIService.findInPath("docker") else { return }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: dockerPath)

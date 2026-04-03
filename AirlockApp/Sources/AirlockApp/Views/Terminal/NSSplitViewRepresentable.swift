@@ -104,6 +104,7 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
 
         deinit {
             for terminal in terminals.values {
+                terminal.terminate()
                 terminal.processDelegate = nil
             }
             terminals.removeAll()
