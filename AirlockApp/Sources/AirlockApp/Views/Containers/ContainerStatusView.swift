@@ -24,7 +24,9 @@ struct ContainerStatusView: View {
     var body: some View {
         if appState.isActive(workspace) {
             activeContent
-                .onAppear { startLogStream() }
+                .task { @MainActor in
+                    startLogStream()
+                }
                 .onDisappear { stopLogStream() }
         } else {
             inactiveContent
@@ -250,6 +252,7 @@ struct ContainerStatusView: View {
 
     private func stopLogStream() {
         logPipe?.fileHandleForReading.readabilityHandler = nil
+        logPipe?.fileHandleForReading.closeFile()
         logPipe = nil
         logProcess?.terminate()
         logProcess = nil
