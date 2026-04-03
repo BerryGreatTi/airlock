@@ -180,7 +180,7 @@ struct AppSettings: Codable, Equatable {
     var airlockBinaryPath: String?
     var containerImage: String = "airlock-claude:latest"
     var proxyImage: String = "airlock-proxy:latest"
-    var passthroughHosts: [String] = []
+    var passthroughHosts: [String] = ["api.anthropic.com", "auth.anthropic.com"]
     var theme: AppTheme = .system
     var terminal: TerminalSettings = TerminalSettings()
 
@@ -191,7 +191,7 @@ struct AppSettings: Codable, Equatable {
         airlockBinaryPath = try container.decodeIfPresent(String.self, forKey: .airlockBinaryPath)
         containerImage = try container.decodeIfPresent(String.self, forKey: .containerImage) ?? "airlock-claude:latest"
         proxyImage = try container.decodeIfPresent(String.self, forKey: .proxyImage) ?? "airlock-proxy:latest"
-        passthroughHosts = try container.decodeIfPresent([String].self, forKey: .passthroughHosts) ?? []
+        passthroughHosts = try container.decodeIfPresent([String].self, forKey: .passthroughHosts) ?? ["api.anthropic.com", "auth.anthropic.com"]
         theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .system
         terminal = try container.decodeIfPresent(TerminalSettings.self, forKey: .terminal) ?? TerminalSettings()
     }

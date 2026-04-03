@@ -91,3 +91,11 @@ Would avoid file-level shadow mounts but requires copying the entire directory (
 ## Revision (2026-04-02)
 
 The Scanner pipeline has been extended with a third scanner type: `FileScanner`. This scanner handles user-registered secret files in 6 formats (dotenv, JSON, YAML, INI, properties, plain text) configured in `.airlock/config.yaml`. It implements the same `Scanner` interface alongside `EnvScanner` and `ClaudeScanner`. See [ADR-0008](ADR-0008-multi-format-secrets.md) for the full design.
+
+## Revision (2026-04-03)
+
+The GUI now defaults `passthroughHosts` to `["api.anthropic.com", "auth.anthropic.com"]`, restoring Anthropic API passthrough for GUI users. The CLI default remains `[]` (empty).
+
+**Why:** The encryption strategy sends `ENC[age:...]` ciphertext to Claude Code inside the container. When the agent makes API calls to Anthropic, those encrypted tokens travel in the request. If Anthropic traffic passes through the decryption proxy, the proxy replaces the ciphertext with plaintext -- exposing the real secrets to the LLM provider. Passthrough for Anthropic hosts ensures encrypted secrets stay encrypted end-to-end for Claude Code traffic.
+
+**Scope:** This only affects the GUI's `AppSettings` default and decoder fallback. The CLI's `config.yaml` default and the `--passthrough-hosts` flag behavior are unchanged. The proxy addon's own fallback (`api.anthropic.com,auth.anthropic.com`) continues to serve as a safety net when no environment variable is set.

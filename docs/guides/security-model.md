@@ -60,7 +60,7 @@ A mitmproxy sidecar intercepts outbound HTTP/HTTPS traffic from the agent contai
 3. Proxy replaces it with the decrypted plaintext value
 4. Request reaches the external API with real credentials
 
-**Full coverage by default:** All outbound traffic goes through the proxy, including Anthropic API calls. No hosts are excluded by default. Users can opt in to passthrough for specific hosts via `--passthrough-hosts` CLI flag or `passthrough_hosts` in `config.yaml`.
+**Passthrough behavior:** The GUI defaults to passthrough for Anthropic API hosts (`api.anthropic.com`, `auth.anthropic.com`) so that `ENC[age:...]` secrets in Claude Code traffic remain encrypted end-to-end. The CLI defaults to no passthrough (all traffic decrypted). Users can configure passthrough for additional hosts via `--passthrough-hosts` CLI flag, `passthrough_hosts` in `config.yaml`, or the GUI Settings panel.
 
 **Response audit logging:** The proxy logs response metadata (status code, content type, size) for all traffic. Response body content is never logged.
 
