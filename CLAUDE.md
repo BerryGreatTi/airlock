@@ -55,6 +55,7 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - Docker named volume `airlock-claude-home` is created as root-owned. Import/export containers run as `root` and `chown 1001:1001` after copy. The `ContainerConfig.User` field controls this.
 - Claude Code stores auth in two files: `~/.claude/.credentials.json` (token) and `~/.claude.json` (session metadata). The entrypoint symlinks `~/.claude.json` into the volume so both persist.
 - Workspaces mount at `/workspace/<basename>` (not `/workspace`). The GUI passes `docker exec -w /workspace/<basename>` to open the terminal at the correct path.
+- In SwiftUI views that take `let workspace: Workspace`, custom `Binding` getters must read from `appState.workspaces` (the source of truth), not the `let workspace` parameter. The parameter is a snapshot captured at view creation -- the getter returns the stale value after the setter mutates `appState.workspaces[idx]`, causing TextFields to revert on keystroke.
 
 ## Documentation
 

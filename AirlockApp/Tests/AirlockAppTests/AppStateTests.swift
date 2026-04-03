@@ -96,4 +96,136 @@ final class AppStateTests: XCTestCase {
         XCTAssertNotEqual(DetailTab.terminal, DetailTab.secrets)
         XCTAssertNotEqual(DetailTab.containers, DetailTab.settings)
     }
+
+    func testSwitchSelectedWorkspace() {
+        let state = AppState()
+        let ws1 = Workspace(name: "project-a", path: "/a")
+        let ws2 = Workspace(name: "project-b", path: "/b")
+        state.workspaces = [ws1, ws2]
+
+        state.selectedWorkspaceID = ws1.id
+        XCTAssertEqual(state.selectedWorkspace?.name, "project-a")
+
+        state.selectedWorkspaceID = ws2.id
+        XCTAssertEqual(state.selectedWorkspace?.name, "project-b")
+    }
+
+    func testSwitchWorkspacePreservesActivationStates() {
+        let state = AppState()
+        let ws1 = Workspace(name: "a", path: "/a")
+        let ws2 = Workspace(name: "b", path: "/b")
+        state.workspaces = [ws1, ws2]
+        state.activationStates[ws1.id] = .active
+        state.activationStates[ws2.id] = .inactive
+
+        state.selectedWorkspaceID = ws1.id
+        XCTAssertEqual(state.activationState(for: state.selectedWorkspace!), .active)
+
+        state.selectedWorkspaceID = ws2.id
+        XCTAssertEqual(state.activationState(for: state.selectedWorkspace!), .inactive)
+        // ws1 state unaffected by selection change
+        XCTAssertEqual(state.activationState(for: ws1), .active)
+    }
+
+    func testSwitchWorkspaceToNil() {
+        let state = AppState()
+        let ws = Workspace(name: "test", path: "/tmp")
+        state.workspaces = [ws]
+        state.selectedWorkspaceID = ws.id
+        XCTAssertNotNil(state.selectedWorkspace)
+
+        state.selectedWorkspaceID = nil
+        XCTAssertNil(state.selectedWorkspace)
+    }
+
+    func testSwitchWorkspaceDuringActivation() {
+        let state = AppState()
+        let ws1 = Workspace(name: "a", path: "/a")
+        let ws2 = Workspace(name: "b", path: "/b")
+        state.workspaces = [ws1, ws2]
+        state.activationStates[ws1.id] = .activating
+
+        state.selectedWorkspaceID = ws1.id
+        XCTAssertTrue(state.isActivating(ws1))
+
+        // Switch away while ws1 is still activating
+        state.selectedWorkspaceID = ws2.id
+        XCTAssertEqual(state.selectedWorkspace?.name, "b")
+        // ws1 activation state must be preserved
+        XCTAssertTrue(state.isActivating(ws1))
+        XCTAssertEqual(state.activationState(for: ws2), .inactive)
+    }
+
+    func testRapidWorkspaceSwitching() {
+        let state = AppState()
+        let ws1 = Workspace(name: "a", path: "/a")
+        let ws2 = Workspace(name: "b", path: "/b")
+        let ws3 = Workspace(name: "c", path: "/c")
+        state.workspaces = [ws1, ws2, ws3]
+        state.activationStates[ws1.id] = .active
+        state.activationStates[ws2.id] = .activating
+        state.activationStates[ws3.id] = .inactive
+
+        // Rapid switch: A -> B -> C
+        state.selectedWorkspaceID = ws1.id
+        state.selectedWorkspaceID = ws2.id
+        state.selectedWorkspaceID = ws3.id
+        XCTAssertEqual(state.selectedWorkspace?.name, "c")
+
+        // All activation states preserved through rapid switching
+        XCTAssertEqual(state.activationState(for: ws1), .active)
+        XCTAssertEqual(state.activationState(for: ws2), .activating)
+        XCTAssertEqual(state.activationState(for: ws3), .inactive)
+    }
+
+    func testDirectTabAssignment() {
+        let state = AppState()
+        state.selectedTab = .secrets
+        XCTAssertEqual(state.selectedTab, .secrets)
+        state.selectedTab = .terminal
+        XCTAssertEqual(state.selectedTab, .terminal)
+    }
+
+    func testActivationStateIndependentPerWorkspace() {
+        let state = AppState()
+        let ws1 = Workspace(name: "a", path: "/a")
+        let ws2 = Workspace(name: "b", path: "/b")
+        let ws3 = Workspace(name: "c", path: "/c")
+        state.workspaces = [ws1, ws2, ws3]
+
+        state.activationStates[ws1.id] = .active
+        state.activationStates[ws2.id] = .activating
+        // ws3 has no entry -- should default to .inactive
+
+        XCTAssertTrue(state.isActive(ws1))
+        XCTAssertFalse(state.isActive(ws2))
+        XCTAssertFalse(state.isActive(ws3))
+
+        XCTAssertFalse(state.isActivating(ws1))
+        XCTAssertTrue(state.isActivating(ws2))
+        XCTAssertFalse(state.isActivating(ws3))
+
+        XCTAssertEqual(state.activationState(for: ws3), .inactive)
+    }
+
+    func testRemoveWorkspaceClearsActivationState() {
+        let state = AppState()
+        let ws1 = Workspace(name: "a", path: "/a")
+        let ws2 = Workspace(name: "b", path: "/b")
+        state.workspaces = [ws1, ws2]
+        state.activationStates[ws1.id] = .active
+        state.activationStates[ws2.id] = .active
+        state.selectedWorkspaceID = ws1.id
+
+        // Simulate sidebar removeWorkspace behavior
+        state.workspaces.removeAll { $0.id == ws1.id }
+        state.activationStates.removeValue(forKey: ws1.id)
+
+        XCTAssertNil(state.workspaces.first { $0.id == ws1.id })
+        XCTAssertNil(state.activationStates[ws1.id])
+        // selectedWorkspace should return nil since ws1 is gone
+        XCTAssertNil(state.selectedWorkspace)
+        // ws2 unaffected
+        XCTAssertEqual(state.activationState(for: ws2), .active)
+    }
 }

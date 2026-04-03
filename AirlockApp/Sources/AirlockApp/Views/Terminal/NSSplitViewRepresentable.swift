@@ -102,6 +102,13 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
             self.onPaneTerminated = onPaneTerminated
         }
 
+        deinit {
+            for terminal in terminals.values {
+                terminal.terminate()
+                terminal.processDelegate = nil
+            }
+        }
+
         func createTerminal(for paneID: UUID) -> AirlockTerminalView {
             let terminal = AirlockTerminalView(frame: .zero)
             let fontSize = CGFloat(terminalSettings.fontSize)

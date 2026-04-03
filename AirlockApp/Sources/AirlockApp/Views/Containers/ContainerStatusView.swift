@@ -24,7 +24,9 @@ struct ContainerStatusView: View {
     var body: some View {
         if appState.isActive(workspace) {
             activeContent
-                .onAppear { startLogStream() }
+                .task {
+                    startLogStream()
+                }
                 .onDisappear { stopLogStream() }
         } else {
             inactiveContent
@@ -206,6 +208,7 @@ struct ContainerStatusView: View {
     @State private var logPipe: Pipe?
 
     private func startLogStream() {
+        guard logProcess == nil else { return }
         guard let dockerPath = CLIService.findInPath("docker") else { return }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: dockerPath)
@@ -250,6 +253,7 @@ struct ContainerStatusView: View {
 
     private func stopLogStream() {
         logPipe?.fileHandleForReading.readabilityHandler = nil
+        logPipe?.fileHandleForReading.closeFile()
         logPipe = nil
         logProcess?.terminate()
         logProcess = nil

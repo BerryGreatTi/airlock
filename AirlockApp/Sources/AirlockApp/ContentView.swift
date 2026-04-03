@@ -57,7 +57,15 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 tabBar
                 Divider()
-                tabContent(workspace: workspace)
+                ZStack {
+                    Color.clear
+                    // Terminals persist per workspace (outside .id scope)
+                    terminalLayer
+                    // Non-terminal tabs rebuild on workspace switch
+                    nonTerminalContent(workspace: workspace)
+                        .id(workspace.id)
+                    errorOverlay
+                }
             }
         } else {
             ContentUnavailableView {
@@ -79,15 +87,14 @@ struct ContentView: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
-    @ViewBuilder
-    private func tabContent(workspace: Workspace) -> some View {
-        ZStack {
-            Color.clear
-            // Terminal stays alive across tab switches
+    /// Terminal views keyed per workspace -- they live outside the .id() scope
+    /// so switching workspaces preserves running terminal sessions.
+    private var terminalLayer: some View {
+        ForEach(appState.workspaces) { ws in
             Group {
-                switch appState.activationState(for: workspace) {
+                switch appState.activationState(for: ws) {
                 case .active:
-                    TerminalSplitView(containerName: workspace.containerName, workDir: workspace.containerWorkDir, terminalSettings: appState.settings.terminal, terminalColors: TerminalColors.forDarkMode(isDarkTerminal), action: $terminalAction)
+                    TerminalSplitView(containerName: ws.containerName, workDir: ws.containerWorkDir, terminalSettings: appState.settings.terminal, terminalColors: TerminalColors.forDarkMode(isDarkTerminal), action: $terminalAction)
                 case .activating:
                     VStack(spacing: 16) {
                         ProgressView()
@@ -106,9 +113,14 @@ struct ContentView: View {
                     }
                 }
             }
-            .opacity(appState.selectedTab == .terminal ? 1 : 0)
-            .allowsHitTesting(appState.selectedTab == .terminal)
+            .opacity(ws.id == appState.selectedWorkspaceID && appState.selectedTab == .terminal ? 1 : 0)
+            .allowsHitTesting(ws.id == appState.selectedWorkspaceID && appState.selectedTab == .terminal)
+        }
+    }
 
+    @ViewBuilder
+    private func nonTerminalContent(workspace: Workspace) -> some View {
+        ZStack {
             if appState.selectedTab == .secrets {
                 SecretsView(workspace: workspace, appState: appState)
             }
@@ -118,26 +130,29 @@ struct ContentView: View {
             if appState.selectedTab == .settings {
                 WorkspaceSettingsView(workspace: workspace, appState: appState)
             }
+        }
+    }
 
-            if let error = appState.lastError {
-                VStack {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                        Text(error).font(.caption)
-                        Spacer()
-                        Button("Dismiss") {
-                            appState.lastError = nil
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                    .padding(8)
-                    .background(.red.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding()
+    @ViewBuilder
+    private var errorOverlay: some View {
+        if let error = appState.lastError {
+            VStack {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text(error).font(.caption)
                     Spacer()
+                    Button("Dismiss") {
+                        appState.lastError = nil
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
+                .padding(8)
+                .background(.red.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding()
+                Spacer()
             }
         }
     }

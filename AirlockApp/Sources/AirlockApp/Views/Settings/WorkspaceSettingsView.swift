@@ -91,7 +91,10 @@ struct WorkspaceSettingsView: View {
 
     private func stringBinding(_ keyPath: WritableKeyPath<Workspace, String?>) -> Binding<String> {
         Binding(
-            get: { workspace[keyPath: keyPath] ?? "" },
+            get: {
+                let ws = appState.workspaces.first { $0.id == workspace.id } ?? workspace
+                return ws[keyPath: keyPath] ?? ""
+            },
             set: { newValue in
                 if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
                     appState.workspaces[idx][keyPath: keyPath] = newValue.isEmpty ? nil : newValue
@@ -104,7 +107,8 @@ struct WorkspaceSettingsView: View {
     private func portBinding() -> Binding<String> {
         Binding(
             get: {
-                if let port = workspace.proxyPortOverride { return String(port) }
+                let ws = appState.workspaces.first { $0.id == workspace.id } ?? workspace
+                if let port = ws.proxyPortOverride { return String(port) }
                 return ""
             },
             set: { newValue in
