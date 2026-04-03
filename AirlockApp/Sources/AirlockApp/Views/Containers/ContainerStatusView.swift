@@ -24,7 +24,7 @@ struct ContainerStatusView: View {
     var body: some View {
         if appState.isActive(workspace) {
             activeContent
-                .task { @MainActor in
+                .task {
                     startLogStream()
                 }
                 .onDisappear { stopLogStream() }

@@ -107,8 +107,6 @@ struct NSSplitViewRepresentable: NSViewRepresentable {
                 terminal.terminate()
                 terminal.processDelegate = nil
             }
-            terminals.removeAll()
-            delegates.removeAll()
         }
 
         func createTerminal(for paneID: UUID) -> AirlockTerminalView {
