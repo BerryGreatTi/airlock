@@ -64,9 +64,40 @@ final class CLIService {
         FileManager.default.fileExists(atPath: (path as NSString).appendingPathComponent(".airlock"))
     }
 
+    /// Directories searched for external tools (`airlock`, `docker`, etc.).
+    ///
+    /// When the app is launched from Finder/Dock, `launchd` provides a
+    /// minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`) that excludes
+    /// common tool install locations. Merge the inherited `PATH` with
+    /// macOS-standard tool directories so docker/airlock are discoverable
+    /// regardless of how the app was launched.
+    static func toolSearchPaths(
+        rawPath: String? = nil,
+        homeDir: String? = nil
+    ) -> [String] {
+        let path = rawPath ?? ProcessInfo.processInfo.environment["PATH"] ?? ""
+        let home = homeDir ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let rawDirs = path.components(separatedBy: ":").filter { !$0.isEmpty }
+        let extras = [
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+            "\(home)/.rd/bin",
+            "\(home)/.colima/bin",
+        ]
+        var seen = Set<String>()
+        var result: [String] = []
+        for dir in rawDirs + extras where seen.insert(dir).inserted {
+            result.append(dir)
+        }
+        return result
+    }
+
     static func findInPath(_ name: String) -> String? {
-        let paths = (ProcessInfo.processInfo.environment["PATH"] ?? "").components(separatedBy: ":")
-        for dir in paths {
+        findInPath(name, searchPaths: toolSearchPaths())
+    }
+
+    static func findInPath(_ name: String, searchPaths: [String]) -> String? {
+        for dir in searchPaths {
             let full = (dir as NSString).appendingPathComponent(name)
             if FileManager.default.isExecutableFile(atPath: full) { return full }
         }
@@ -75,12 +106,7 @@ final class CLIService {
 
     static func enrichedEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
-        let extraPaths = ["/usr/local/bin", "/opt/homebrew/bin"]
-        let currentPath = env["PATH"] ?? ""
-        let missing = extraPaths.filter { !currentPath.contains($0) }
-        if !missing.isEmpty {
-            env["PATH"] = (missing + [currentPath]).joined(separator: ":")
-        }
+        env["PATH"] = toolSearchPaths().joined(separator: ":")
         if env["DOCKER_HOST"] == nil {
             let home = FileManager.default.homeDirectoryForCurrentUser.path
             let candidates = [
