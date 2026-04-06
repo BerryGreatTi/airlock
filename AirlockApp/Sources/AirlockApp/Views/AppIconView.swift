@@ -42,9 +42,10 @@ struct AirlockIconView: View {
             for i in 0..<tabCount {
                 let angle = Double(i) * (360.0 / Double(tabCount)) + 15.0
                 let rad = angle * .pi / 180.0
+                let tabRadius: CGFloat = (tabInnerR + tabOuterR) / 2
                 let tabCenter = CGPoint(
-                    x: center.x + (tabInnerR + tabOuterR) / 2 * cos(rad),
-                    y: center.y + (tabInnerR + tabOuterR) / 2 * sin(rad)
+                    x: center.x + tabRadius * cos(rad),
+                    y: center.y + tabRadius * sin(rad)
                 )
                 let tabH = tabOuterR - tabInnerR
                 let tab = Self.rotatedRect(center: tabCenter, halfWidth: tabWidth / 2, halfHeight: tabH / 2, angle: rad)
