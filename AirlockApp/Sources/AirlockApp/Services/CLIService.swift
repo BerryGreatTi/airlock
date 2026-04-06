@@ -14,8 +14,30 @@ final class CLIService {
     }
 
     func resolveAirlockBinary() -> String {
-        if let explicit = binaryPath { return explicit }
+        // 1. Explicit path from settings (if executable)
+        if let explicit = binaryPath,
+           FileManager.default.isExecutableFile(atPath: explicit) {
+            return explicit
+        }
+        // 2. Sibling next to the app executable (Contents/MacOS/airlock)
+        if let execURL = Bundle.main.executableURL {
+            let sibling = execURL.deletingLastPathComponent()
+                .appendingPathComponent("airlock").path
+            if FileManager.default.isExecutableFile(atPath: sibling) {
+                return sibling
+            }
+        }
+        // 3. Legacy bundle resources placement (Contents/Resources/bin/airlock)
+        if let resourceURL = Bundle.main.resourceURL {
+            let resourceBin = resourceURL
+                .appendingPathComponent("bin/airlock").path
+            if FileManager.default.isExecutableFile(atPath: resourceBin) {
+                return resourceBin
+            }
+        }
+        // 4. PATH search (swift run, standalone CLI installs)
         if let found = Self.findInPath("airlock") { return found }
+        // 5. Fallback
         return "/usr/local/bin/airlock"
     }
 

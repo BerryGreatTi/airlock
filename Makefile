@@ -1,4 +1,4 @@
-.PHONY: build test test-python test-e2e lint clean docker-build docker-clean gui-build gui-test gui-run
+.PHONY: build test test-python test-e2e lint clean docker-build docker-clean gui-build gui-test gui-run gui-package
 
 BINARY := airlock
 VERSION := 0.1.0
@@ -39,3 +39,6 @@ gui-test:
 
 gui-run:
 	cd AirlockApp && swift run
+
+gui-package:
+	./scripts/package-app.sh --version $(VERSION)

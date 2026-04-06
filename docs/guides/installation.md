@@ -17,7 +17,7 @@ Download `AirlockApp-macOS.zip` from [Releases](https://github.com/BerryGreatTi/
 
 ```bash
 unzip AirlockApp-macOS.zip
-mv AirlockApp.app /Applications/
+mv Airlock.app /Applications/
 ```
 
 On first launch, macOS may block the unsigned app. Go to System Settings > Privacy & Security > Open Anyway.
@@ -46,7 +46,21 @@ This creates:
 6. Click "Create Workspace"
 7. Activate the workspace to start containers and open a terminal
 
-The GUI includes the CLI engine internally. No separate CLI installation is needed for GUI users.
+The GUI bundles the CLI engine inside the `.app` package (`Contents/MacOS/airlock`). No separate CLI installation is needed for GUI users.
+
+### Build from source
+
+To build the `.app` bundle locally:
+
+```bash
+git clone https://github.com/BerryGreatTi/airlock.git
+cd airlock
+make gui-package
+# Output: build/Airlock.app
+cp -r build/Airlock.app /Applications/
+```
+
+This builds both the Go CLI and Swift GUI, generates the app icon, and produces a signed `.app` bundle.
 
 ## Install the CLI (Linux & advanced users)
 
