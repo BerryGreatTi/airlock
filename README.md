@@ -51,7 +51,7 @@ Download `AirlockApp-macOS.zip` from [Releases](https://github.com/BerryGreatTi/
 
 ```bash
 unzip AirlockApp-macOS.zip
-mv AirlockApp.app /Applications/
+mv Airlock.app /Applications/
 ```
 
 The app provides:

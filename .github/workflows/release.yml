@@ -54,9 +54,6 @@ jobs:
       - name: Run Go tests
         run: go test -race ./internal/...
 
-      - name: Build GUI (Swift, release mode)
-        run: cd AirlockApp && swift build -c release
-
       - name: Run GUI tests
         run: cd AirlockApp && swift test
 
@@ -64,47 +61,11 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          APP_DIR="AirlockApp.app/Contents"
-          mkdir -p "$APP_DIR/MacOS"
-          mkdir -p "$APP_DIR/Resources/bin"
-
-          cp AirlockApp/.build/release/AirlockApp "$APP_DIR/MacOS/AirlockApp"
-          cp airlock-darwin-universal "$APP_DIR/Resources/bin/airlock"
-          chmod +x "$APP_DIR/Resources/bin/airlock"
-
-          cat > "$APP_DIR/Info.plist" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleName</key>
-              <string>Airlock</string>
-              <key>CFBundleDisplayName</key>
-              <string>Airlock</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.airlock.app</string>
-              <key>CFBundleVersion</key>
-              <string>1.0</string>
-              <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
-              <key>CFBundleExecutable</key>
-              <string>AirlockApp</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>14.0</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-          </dict>
-          </plist>
-          PLIST
-
-          # Patch version into plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_DIR/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Info.plist"
-
-          codesign --force --deep --sign - AirlockApp.app
-          ditto -c -k --sequesterRsrc --keepParent AirlockApp.app "AirlockApp-macOS.zip"
+          ./scripts/package-app.sh \
+            --version "$VERSION" \
+            --cli-binary airlock-darwin-universal \
+            --output build
+          ditto -c -k --sequesterRsrc --keepParent build/Airlock.app "AirlockApp-macOS.zip"
 
       - name: Package CLI binaries
         run: |

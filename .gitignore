@@ -1,4 +1,5 @@
 bin/
+build/
 *.age
 *.key
 .airlock/keys/

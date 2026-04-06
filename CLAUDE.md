@@ -13,6 +13,7 @@
 | `make gui-build` | Build macOS SwiftUI app (requires macOS + Xcode) |
 | `make gui-test` | Run Swift tests |
 | `make gui-run` | Run the GUI app locally |
+| `make gui-package` | Build `Airlock.app` bundle (with embedded Go CLI + icon) to `build/Airlock.app` |
 | `airlock volume status` | Show persistent volume state |
 | `airlock volume reset --confirm` | Destroy and recreate the `.claude` volume |
 | `airlock config import` | Import host `~/.claude` into the airlock volume |
@@ -56,6 +57,8 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - Claude Code stores auth in two files: `~/.claude/.credentials.json` (token) and `~/.claude.json` (session metadata). The entrypoint symlinks `~/.claude.json` into the volume so both persist.
 - Workspaces mount at `/workspace/<basename>` (not `/workspace`). The GUI passes `docker exec -w /workspace/<basename>` to open the terminal at the correct path.
 - In SwiftUI views that take `let workspace: Workspace`, custom `Binding` getters must read from `appState.workspaces` (the source of truth), not the `let workspace` parameter. The parameter is a snapshot captured at view creation -- the getter returns the stale value after the setter mutates `appState.workspaces[idx]`, causing TextFields to revert on keystroke.
+- The `.app` bundle embeds the Go CLI at `Contents/MacOS/airlock` (sibling to the Swift binary). `CLIService.resolveAirlockBinary()` checks this path via `Bundle.main.executableURL` before falling back to `$PATH`. See [ADR-0009](docs/decisions/ADR-0009-macos-app-bundling.md).
+- Icon Canvas drawing logic exists in TWO files: `AirlockApp/Sources/AirlockApp/Views/AppIconView.swift` (runtime dock icon) and `scripts/generate-icon-main.swift` (build-time `.icns` generation). Visual changes must be made in both. Duplication is required because the SPM `@main` executable target cannot be imported as a library.
 
 ## Documentation
 
