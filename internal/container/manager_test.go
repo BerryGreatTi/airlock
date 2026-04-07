@@ -21,7 +21,7 @@ func TestContainerOptsValidation(t *testing.T) {
 				Workspace: "/tmp/workspace", Image: "airlock-claude:latest",
 				ProxyImage: "airlock-proxy:latest", NetworkName: "airlock-net",
 				MappingPath: "/tmp/mapping.json",
-				ClaudeDir: "/home/user/.claude", ProxyPort: 8080,
+				ClaudeDir:   "/home/user/.claude", ProxyPort: 8080,
 			},
 			wantErr: false,
 		},
@@ -56,9 +56,9 @@ func TestBuildProxyContainerConfig(t *testing.T) {
 func TestBuildClaudeContainerConfig(t *testing.T) {
 	opts := container.RunOpts{
 		Workspace: "/home/user/project", Image: "airlock-claude:latest",
-		NetworkName: "airlock-net",
+		NetworkName:  "airlock-net",
 		ShadowMounts: []secrets.ShadowMount{{HostPath: "/tmp/.env.enc", ContainerPath: "/run/airlock/env.enc"}},
-		VolumeName: "test-volume", ProxyPort: 8080, CACertPath: "/tmp/ca.pem",
+		VolumeName:   "test-volume", ProxyPort: 8080, CACertPath: "/tmp/ca.pem",
 	}
 	cfg := container.BuildClaudeConfig(opts)
 	if cfg.Image != "airlock-claude:latest" {
@@ -127,8 +127,8 @@ func TestBuildClaudeConfigAllBindMounts(t *testing.T) {
 	// Verify bind mounts present with correct paths and modes
 	expectations := map[string]string{
 		"/workspace/": "/home/user/project:/workspace/",
-		"env.enc:ro": "env.enc:ro",
-		"ca-cert:ro": "ca-certificates/airlock-proxy.crt:ro",
+		"env.enc:ro":  "env.enc:ro",
+		"ca-cert:ro":  "ca-certificates/airlock-proxy.crt:ro",
 	}
 	for label, substr := range expectations {
 		found := false
@@ -634,11 +634,11 @@ func TestBuildClaudeConfigWithClaudeDirFallback(t *testing.T) {
 
 func TestBuildClaudeConfigInjectsEnvSecrets(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:  "/home/user/project",
-		Image:      "airlock-claude:latest",
-		ProxyImage: "airlock-proxy:latest",
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		ProxyImage:  "airlock-proxy:latest",
 		NetworkName: "airlock-net",
-		ProxyPort:  8080,
+		ProxyPort:   8080,
 		EnvSecrets: []secrets.EnvVar{
 			{Name: "GITHUB_TOKEN", Value: "ENC[age:AQIBAAAB]"},
 			{Name: "SLACK_TOKEN", Value: "ENC[age:AQIBAAAC]"},
@@ -673,11 +673,11 @@ func TestBuildClaudeConfigInjectsEnvSecrets(t *testing.T) {
 
 func TestBuildClaudeConfigZeroEnvSecretsUnchanged(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:  "/home/user/project",
-		Image:      "airlock-claude:latest",
-		ProxyImage: "airlock-proxy:latest",
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		ProxyImage:  "airlock-proxy:latest",
 		NetworkName: "airlock-net",
-		ProxyPort:  8080,
+		ProxyPort:   8080,
 	}
 	cfg := container.BuildClaudeConfig(opts)
 	for _, e := range cfg.Env {
@@ -699,11 +699,11 @@ func TestBuildClaudeConfigZeroEnvSecretsUnchanged(t *testing.T) {
 
 func TestBuildClaudeDetachedConfigInjectsEnvSecrets(t *testing.T) {
 	opts := container.RunOpts{
-		Workspace:  "/home/user/project",
-		Image:      "airlock-claude:latest",
-		ProxyImage: "airlock-proxy:latest",
+		Workspace:   "/home/user/project",
+		Image:       "airlock-claude:latest",
+		ProxyImage:  "airlock-proxy:latest",
 		NetworkName: "airlock-net",
-		ProxyPort:  8080,
+		ProxyPort:   8080,
 		EnvSecrets: []secrets.EnvVar{
 			{Name: "GITHUB_TOKEN", Value: "ENC[age:AQIBAAAB]"},
 		},
