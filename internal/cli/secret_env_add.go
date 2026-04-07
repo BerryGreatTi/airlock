@@ -33,7 +33,7 @@ func RunSecretEnvAdd(name, value string, force bool, airlockDir string) error {
 
 	// Validation done up-front so we never call Encrypt on a bad name.
 	if !config.IsValidEnvVarName(name) {
-		return fmt.Errorf("invalid name %q: must match ^[A-Za-z_][A-Za-z0-9_]*$", name)
+		return fmt.Errorf("invalid name %q: must match %s", name, config.EnvVarNamePattern)
 	}
 	if config.ReservedEnvNames[name] {
 		return fmt.Errorf("env secret name %q is reserved by airlock", name)
@@ -51,28 +51,31 @@ func RunSecretEnvAdd(name, value string, force bool, airlockDir string) error {
 		stored = crypto.WrapENC(ct)
 	}
 
-	// Upsert.
+	// Upsert: in-place update if the name exists, otherwise append.
+	action := "Added"
+	found := false
 	for i, es := range cfg.EnvSecrets {
-		if es.Name == name {
-			if !force {
-				return fmt.Errorf("env secret %q already exists; use --force to overwrite", name)
-			}
-			cfg.EnvSecrets[i].Value = stored
-			if err := config.Save(cfg, airlockDir); err != nil {
-				return fmt.Errorf("save config: %w", err)
-			}
-			fmt.Printf("Updated env secret %s\n", name)
-			return nil
+		if es.Name != name {
+			continue
 		}
+		if !force {
+			return fmt.Errorf("env secret %q already exists; use --force to overwrite", name)
+		}
+		cfg.EnvSecrets[i].Value = stored
+		action = "Updated"
+		found = true
+		break
 	}
-	cfg.EnvSecrets = append(cfg.EnvSecrets, config.EnvSecretConfig{
-		Name:  name,
-		Value: stored,
-	})
+	if !found {
+		cfg.EnvSecrets = append(cfg.EnvSecrets, config.EnvSecretConfig{
+			Name:  name,
+			Value: stored,
+		})
+	}
 	if err := config.Save(cfg, airlockDir); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
-	fmt.Printf("Added env secret %s\n", name)
+	fmt.Printf("%s env secret %s\n", action, name)
 	return nil
 }
 
@@ -106,10 +109,9 @@ func readSecretValue(name string, valueFlag string, valueFlagSet bool, stdinFlag
 }
 
 var (
-	secretEnvAddValue    string
-	secretEnvAddValueSet bool
-	secretEnvAddStdin    bool
-	secretEnvAddForce    bool
+	secretEnvAddValue string
+	secretEnvAddStdin bool
+	secretEnvAddForce bool
 )
 
 var secretEnvAddCmd = &cobra.Command{
@@ -117,10 +119,10 @@ var secretEnvAddCmd = &cobra.Command{
 	Short: "Register an environment-variable secret",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		secretEnvAddValueSet = cmd.Flags().Changed("value")
+		valueFlagSet := cmd.Flags().Changed("value")
 		value, err := readSecretValue(
 			args[0],
-			secretEnvAddValue, secretEnvAddValueSet,
+			secretEnvAddValue, valueFlagSet,
 			secretEnvAddStdin,
 			os.Stdin,
 		)

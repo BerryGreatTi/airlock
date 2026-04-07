@@ -38,11 +38,15 @@ type Config struct {
 	EnvSecrets       []EnvSecretConfig  `yaml:"env_secrets,omitempty"`
 }
 
-var envNameRegex = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+// EnvVarNamePattern is the POSIX env var identifier pattern. Exported so
+// error messages can reference the canonical rule instead of hardcoding it.
+const EnvVarNamePattern = `^[A-Za-z_][A-Za-z0-9_]*$`
 
-// IsValidEnvVarName reports whether name is a valid POSIX env var identifier
-// (matches ^[A-Za-z_][A-Za-z0-9_]*$). Exported so CLI validation can reuse
-// the canonical rule instead of reimplementing it.
+var envNameRegex = regexp.MustCompile(EnvVarNamePattern)
+
+// IsValidEnvVarName reports whether name is a valid POSIX env var identifier.
+// Exported so CLI validation can reuse the canonical rule instead of
+// reimplementing it.
 func IsValidEnvVarName(name string) bool {
 	return envNameRegex.MatchString(name)
 }
@@ -59,7 +63,7 @@ func validateEnvSecrets(cfg *Config) error {
 	seen := make(map[string]bool, len(cfg.EnvSecrets))
 	for i, es := range cfg.EnvSecrets {
 		if !envNameRegex.MatchString(es.Name) {
-			return fmt.Errorf("env secret at index %d: invalid name %q: must match ^[A-Za-z_][A-Za-z0-9_]*$", i, es.Name)
+			return fmt.Errorf("env secret at index %d: invalid name %q: must match %s", i, es.Name, EnvVarNamePattern)
 		}
 		if ReservedEnvNames[es.Name] {
 			return fmt.Errorf("env secret name %q is reserved by airlock", es.Name)
