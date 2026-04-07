@@ -32,7 +32,7 @@ func RunSecretEnvAdd(name, value string, force bool, airlockDir string) error {
 	}
 
 	// Validation done up-front so we never call Encrypt on a bad name.
-	if !envNameRegexCLI.MatchString(name) {
+	if !config.IsValidEnvVarName(name) {
 		return fmt.Errorf("invalid name %q: must match ^[A-Za-z_][A-Za-z0-9_]*$", name)
 	}
 	if config.ReservedEnvNames[name] {
@@ -74,29 +74,6 @@ func RunSecretEnvAdd(name, value string, force bool, airlockDir string) error {
 	}
 	fmt.Printf("Added env secret %s\n", name)
 	return nil
-}
-
-// envNameRegexCLI validates POSIX env var names at the CLI boundary.
-// Mirrors the regex in internal/config; both must stay in sync.
-var envNameRegexCLI = &envNameValidator{}
-
-type envNameValidator struct{}
-
-func (envNameValidator) MatchString(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i, r := range s {
-		switch {
-		case r >= 'A' && r <= 'Z':
-		case r >= 'a' && r <= 'z':
-		case r == '_':
-		case i > 0 && r >= '0' && r <= '9':
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 // readSecretValue resolves --value / --stdin / TTY prompt precedence.

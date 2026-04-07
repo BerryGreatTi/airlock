@@ -14,7 +14,7 @@ import (
 // SecretFileConfig describes a user-registered secret file for encryption.
 type SecretFileConfig struct {
 	Path        string   `yaml:"path"`
-	Format      string   `yaml:"format"`               // "dotenv", "json", "yaml", "ini", "properties", "text"
+	Format      string   `yaml:"format"`                 // "dotenv", "json", "yaml", "ini", "properties", "text"
 	EncryptKeys []string `yaml:"encrypt_keys,omitempty"` // keys to encrypt; empty = encrypt all
 }
 
@@ -39,6 +39,13 @@ type Config struct {
 }
 
 var envNameRegex = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// IsValidEnvVarName reports whether name is a valid POSIX env var identifier
+// (matches ^[A-Za-z_][A-Za-z0-9_]*$). Exported so CLI validation can reuse
+// the canonical rule instead of reimplementing it.
+func IsValidEnvVarName(name string) bool {
+	return envNameRegex.MatchString(name)
+}
 
 // validateEnvSecrets enforces invariants on cfg.EnvSecrets:
 // 1. Name matches POSIX env var format ^[A-Za-z_][A-Za-z0-9_]*$
