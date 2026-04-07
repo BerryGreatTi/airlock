@@ -29,6 +29,7 @@ struct SecretsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            passthroughBanner
             if appState.isActive(workspace) {
                 restartBanner
             }
@@ -66,6 +67,24 @@ struct SecretsView: View {
             Button("Cancel", role: .cancel) {}
         } message: { file in
             Text("'\(file.label)' has encrypted values. Removing without decrypting means values stay as ENC[age:...] ciphertext. Decrypt first?")
+        }
+    }
+
+    @ViewBuilder
+    private var passthroughBanner: some View {
+        let resolved = ResolvedSettings(global: appState.settings, workspace: workspace)
+        let missing = PassthroughPolicy.missingProtectedHosts(from: resolved.passthroughHosts)
+        if !missing.isEmpty {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.yellow)
+                Text("Anthropic passthrough disabled — secrets will be sent as plaintext to \(missing.joined(separator: ", ")).")
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                Spacer()
+            }
+            .padding(8)
+            .background(.yellow.opacity(0.15))
         }
     }
 
