@@ -10,6 +10,8 @@ struct GlobalSettingsSheet: View {
     @State private var volumeStatus = "Checking..."
     @State private var showImportSheet = false
     @State private var showResetAlert = false
+    @State private var showRemoveAnthropicConfirm = false
+    @State private var pendingMissingHosts: [String] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -67,6 +69,23 @@ struct GlobalSettingsSheet: View {
                     TextEditor(text: $passthroughText)
                         .font(.system(size: 12, design: .monospaced))
                         .frame(height: 80)
+
+                    let missing = PassthroughPolicy.missingProtectedHosts(
+                        from: parsePassthroughEditorLines(passthroughText)
+                    )
+                    if !missing.isEmpty {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
+                            Text("Removing \(missing.joined(separator: ", ")) from passthrough means Airlock will decrypt secrets in requests to Anthropic. Your plaintext credentials will be sent to Anthropic's servers. This defeats the purpose of Airlock — only remove for testing.")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(8)
+                        .background(Color.yellow.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
                 }
 
                 Section("Claude Code State Volume") {
@@ -125,6 +144,14 @@ struct GlobalSettingsSheet: View {
         } message: {
             Text("This will delete all Claude Code state including OAuth tokens, history, and memory. This cannot be undone.")
         }
+        .alert("Disable Anthropic passthrough?", isPresented: $showRemoveAnthropicConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove anyway", role: .destructive) {
+                commitSave(parsedHosts: parsePassthroughEditorLines(passthroughText))
+            }
+        } message: {
+            Text("\(pendingMissingHosts.joined(separator: ", ")) will be removed from passthrough. Airlock will then decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
+        }
     }
 
     private func checkVolumeStatus() async {
@@ -137,6 +164,13 @@ struct GlobalSettingsSheet: View {
         }
     }
 
+    private func parsePassthroughEditorLines(_ text: String) -> [String] {
+        text
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
     private func load() {
         let store = WorkspaceStore()
         settings = (try? store.loadSettings()) ?? AppSettings()
@@ -144,10 +178,18 @@ struct GlobalSettingsSheet: View {
     }
 
     private func save() {
-        settings.passthroughHosts = passthroughText
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        let parsed = parsePassthroughEditorLines(passthroughText)
+        let missing = PassthroughPolicy.missingProtectedHosts(from: parsed)
+        if !missing.isEmpty {
+            pendingMissingHosts = missing
+            showRemoveAnthropicConfirm = true
+            return
+        }
+        commitSave(parsedHosts: parsed)
+    }
+
+    private func commitSave(parsedHosts: [String]) {
+        settings.passthroughHosts = parsedHosts
 
         let store = WorkspaceStore()
         do {
