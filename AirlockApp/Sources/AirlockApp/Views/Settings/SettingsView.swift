@@ -11,7 +11,6 @@ struct GlobalSettingsSheet: View {
     @State private var showImportSheet = false
     @State private var showResetAlert = false
     @State private var showRemoveAnthropicConfirm = false
-    @State private var pendingMissingHosts: [String] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,7 +70,7 @@ struct GlobalSettingsSheet: View {
                         .frame(height: 80)
 
                     let missing = PassthroughPolicy.missingProtectedHosts(
-                        from: parsePassthroughEditorLines(passthroughText)
+                        from: PassthroughPolicy.splitHostLines(passthroughText)
                     )
                     if !missing.isEmpty {
                         HStack(alignment: .top, spacing: 6) {
@@ -147,10 +146,13 @@ struct GlobalSettingsSheet: View {
         .alert("Disable Anthropic passthrough?", isPresented: $showRemoveAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Remove anyway", role: .destructive) {
-                commitSave(parsedHosts: parsePassthroughEditorLines(passthroughText))
+                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
             }
         } message: {
-            Text("\(pendingMissingHosts.joined(separator: ", ")) will be removed from passthrough. Airlock will then decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
+            let missing = PassthroughPolicy.missingProtectedHosts(
+                from: PassthroughPolicy.splitHostLines(passthroughText)
+            )
+            Text("\(missing.joined(separator: ", ")) will be removed from passthrough. Airlock will then decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
         }
     }
 
@@ -164,13 +166,6 @@ struct GlobalSettingsSheet: View {
         }
     }
 
-    private func parsePassthroughEditorLines(_ text: String) -> [String] {
-        text
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-    }
-
     private func load() {
         let store = WorkspaceStore()
         settings = (try? store.loadSettings()) ?? AppSettings()
@@ -178,18 +173,17 @@ struct GlobalSettingsSheet: View {
     }
 
     private func save() {
-        let parsed = parsePassthroughEditorLines(passthroughText)
+        let parsed = PassthroughPolicy.splitHostLines(passthroughText)
         let missing = PassthroughPolicy.missingProtectedHosts(from: parsed)
         if !missing.isEmpty {
-            pendingMissingHosts = missing
             showRemoveAnthropicConfirm = true
             return
         }
-        commitSave(parsedHosts: parsed)
+        commitSave(hosts: parsed)
     }
 
-    private func commitSave(parsedHosts: [String]) {
-        settings.passthroughHosts = parsedHosts
+    private func commitSave(hosts: [String]) {
+        settings.passthroughHosts = hosts
 
         let store = WorkspaceStore()
         do {

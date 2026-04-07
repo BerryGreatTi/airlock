@@ -28,4 +28,14 @@ enum PassthroughPolicy {
             .filter { !normalized.contains($0) }
             .sorted()
     }
+
+    /// Split a newline-delimited passthrough editor string into trimmed,
+    /// non-empty host tokens. Used by the Settings and WorkspaceSettings
+    /// passthrough editors to normalize their TextEditor bindings.
+    static func splitHostLines(_ text: String) -> [String] {
+        text
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
 }

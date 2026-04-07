@@ -68,7 +68,9 @@ struct AddEnvSecretSheet: View {
         let submittedValue = value
         defer {
             isAdding = false
-            // Drop the value reference after the call returns.
+            // Clear the SecureField so the value does not linger in view state.
+            // Note: this does not zero the underlying memory; Swift strings
+            // are not guaranteed to be securely wiped.
             value = ""
         }
         let cli = CLIService()

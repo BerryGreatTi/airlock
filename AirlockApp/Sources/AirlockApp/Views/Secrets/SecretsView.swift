@@ -382,7 +382,11 @@ struct SecretsView: View {
         guard let result = try? await cli.run(
             args: ["secret", "env", "list", "--json"],
             workingDirectory: workspace.path
-        ), result.exitCode == 0 else {
+        ) else {
+            return
+        }
+        if result.exitCode != 0 {
+            errorMessage = result.stderr.isEmpty ? "Failed to load env secrets" : result.stderr
             return
         }
         let data = Data(result.stdout.utf8)
@@ -393,10 +397,14 @@ struct SecretsView: View {
 
     private func removeEnvSecret(_ secret: EnvSecret) async {
         let cli = CLIService()
-        _ = try? await cli.run(
+        let result = try? await cli.run(
             args: ["secret", "env", "remove", secret.name],
             workingDirectory: workspace.path
         )
+        if let result, result.exitCode != 0 {
+            errorMessage = result.stderr.isEmpty ? "Failed to remove env secret" : result.stderr
+            return
+        }
         await loadEnvSecrets()
         if selectedFileID == secret.id {
             selectedFileID = nil
