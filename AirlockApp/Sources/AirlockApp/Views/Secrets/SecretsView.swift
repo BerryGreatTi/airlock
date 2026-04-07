@@ -16,6 +16,7 @@ struct SecretsView: View {
     @State private var showingAddEnvSecret = false
     @State private var envSecretToRemove: EnvSecret?
     @State private var showEnvRemoveConfirm = false
+    @State private var envSecretDetailPrefix: [String: String] = [:]
 
     private var displayedEntries: [SecretEntry] {
         if selectedFileID == nil {
@@ -280,7 +281,7 @@ struct SecretsView: View {
             Text("Value (truncated)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("ENC[age:••••••••")
+            Text("\(envSecretDetailPrefix[secret.name] ?? "ENC[age:…")…")
                 .fontDesign(.monospaced)
                 .foregroundStyle(.secondary)
 
@@ -291,6 +292,32 @@ struct SecretsView: View {
             Spacer()
         }
         .padding()
+        .task(id: secret.id) {
+            await loadEnvSecretDetailPrefix(secret)
+        }
+    }
+
+    private func loadEnvSecretDetailPrefix(_ secret: EnvSecret) async {
+        if envSecretDetailPrefix[secret.name] != nil {
+            return
+        }
+        let cli = CLIService()
+        guard let result = try? await cli.run(
+            args: ["secret", "env", "show", secret.name, "--json"],
+            workingDirectory: workspace.path
+        ), result.exitCode == 0 else {
+            return
+        }
+        struct ShowInfo: Decodable {
+            let valuePrefix: String
+            enum CodingKeys: String, CodingKey {
+                case valuePrefix = "value_prefix"
+            }
+        }
+        let data = Data(result.stdout.utf8)
+        if let info = try? JSONDecoder().decode(ShowInfo.self, from: data) {
+            envSecretDetailPrefix[secret.name] = info.valuePrefix
+        }
     }
 
     private var entriesToolbar: some View {
@@ -366,7 +393,11 @@ struct SecretsView: View {
         guard let result = try? await cli.run(args: ["secret", "list", "--json"], workingDirectory: workspace.path) else {
             return
         }
-        guard result.exitCode == 0, let data = result.stdout.data(using: .utf8) else { return }
+        if result.exitCode != 0 {
+            errorMessage = result.stderr.isEmpty ? "Failed to load secret files" : result.stderr
+            return
+        }
+        guard let data = result.stdout.data(using: .utf8) else { return }
 
         struct FileInfo: Decodable {
             let path: String
@@ -542,10 +573,14 @@ struct SecretsView: View {
 
     private func removeFile(_ file: SecretFile) async {
         let cli = CLIService()
-        _ = try? await cli.run(
+        let result = try? await cli.run(
             args: ["secret", "remove", file.path],
             workingDirectory: workspace.path
         )
+        if let result, result.exitCode != 0 {
+            errorMessage = result.stderr.isEmpty ? "Failed to remove secret file" : result.stderr
+            return
+        }
         await loadSecretFiles()
         if selectedFileID == file.id {
             selectedFileID = nil
