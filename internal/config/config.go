@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/taeikkim92/airlock/internal/fsutil"
 	"gopkg.in/yaml.v3"
@@ -36,6 +38,36 @@ type Config struct {
 	EnvSecrets       []EnvSecretConfig  `yaml:"env_secrets,omitempty"`
 }
 
+var envNameRegex = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// validateEnvSecrets enforces invariants on cfg.EnvSecrets:
+// 1. Name matches POSIX env var format ^[A-Za-z_][A-Za-z0-9_]*$
+// 2. Name is not in ReservedEnvNames
+// 3. Names are unique within env_secrets[]
+// 4. Value starts with "ENC[age:" and ends with "]"
+//
+// Any violation is a hard error so the user discovers misconfigurations
+// at load time, not at session start.
+func validateEnvSecrets(cfg *Config) error {
+	seen := make(map[string]bool, len(cfg.EnvSecrets))
+	for i, es := range cfg.EnvSecrets {
+		if !envNameRegex.MatchString(es.Name) {
+			return fmt.Errorf("env secret at index %d: invalid name %q: must match ^[A-Za-z_][A-Za-z0-9_]*$", i, es.Name)
+		}
+		if ReservedEnvNames[es.Name] {
+			return fmt.Errorf("env secret name %q is reserved by airlock", es.Name)
+		}
+		if seen[es.Name] {
+			return fmt.Errorf("duplicate env secret name %q", es.Name)
+		}
+		seen[es.Name] = true
+		if !strings.HasPrefix(es.Value, "ENC[age:") || !strings.HasSuffix(es.Value, "]") {
+			return fmt.Errorf("env secret %q: value is not an ENC[age:...] ciphertext", es.Name)
+		}
+	}
+	return nil
+}
+
 func Default() Config {
 	return Config{
 		ContainerImage:   "airlock-claude:latest",
@@ -65,6 +97,9 @@ func Load(airlockDir string) (Config, error) {
 	cfg := Default()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config: %w", err)
+	}
+	if err := validateEnvSecrets(&cfg); err != nil {
+		return Config{}, fmt.Errorf("config load: %w", err)
 	}
 	return cfg, nil
 }
