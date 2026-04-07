@@ -12,6 +12,10 @@ struct SecretsView: View {
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var showingAddFile = false
+    @State private var envSecrets: [EnvSecret] = []
+    @State private var showingAddEnvSecret = false
+    @State private var envSecretToRemove: EnvSecret?
+    @State private var showEnvRemoveConfirm = false
 
     private var displayedEntries: [SecretEntry] {
         if selectedFileID == nil {
@@ -21,6 +25,11 @@ struct SecretsView: View {
             return settingsEntries
         }
         return entries
+    }
+
+    private var selectedEnvSecret: EnvSecret? {
+        guard let id = selectedFileID else { return nil }
+        return envSecrets.first { $0.id == id }
     }
 
     // Stable UUID for the Claude Settings pseudo-file entry.
@@ -41,12 +50,28 @@ struct SecretsView: View {
         }
         .task {
             await loadSecretFiles()
+            await loadEnvSecrets()
             loadSettingsSecrets()
         }
         .sheet(isPresented: $showingAddFile) {
             AddSecretFileSheet(workspace: workspace) {
                 Task { await loadSecretFiles() }
             }
+        }
+        .sheet(isPresented: $showingAddEnvSecret) {
+            AddEnvSecretSheet(workspace: workspace) {
+                Task { await loadEnvSecrets() }
+            }
+        }
+        .alert("Remove env secret?",
+               isPresented: $showEnvRemoveConfirm,
+               presenting: envSecretToRemove) { secret in
+            Button("Remove", role: .destructive) {
+                Task { await removeEnvSecret(secret) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { secret in
+            Text("Remove '\(secret.name)'? This will delete the encrypted value from .airlock/config.yaml. Unrecoverable.")
         }
         .alert("File contains encrypted values",
                isPresented: $showRemoveWarning,
@@ -105,6 +130,24 @@ struct SecretsView: View {
     private var fileListPanel: some View {
         VStack(spacing: 0) {
             List(selection: $selectedFileID) {
+                Section("Env Variables") {
+                    ForEach(envSecrets) { secret in
+                        HStack {
+                            Image(systemName: "key.fill")
+                                .foregroundStyle(.secondary)
+                            Text(secret.name)
+                                .lineLimit(1)
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        .tag(secret.id)
+                        .contextMenu {
+                            Button("Remove", role: .destructive) {
+                                envSecretToRemove = secret
+                                showEnvRemoveConfirm = true
+                            }
+                        }
+                    }
+                }
                 Section("Files") {
                     ForEach(secretFiles) { file in
                         HStack {
@@ -137,6 +180,10 @@ struct SecretsView: View {
                     Label("Add File", systemImage: "plus")
                 }
                 .buttonStyle(.borderless)
+                Button { showingAddEnvSecret = true } label: {
+                    Label("Add Env", systemImage: "key.viewfinder")
+                }
+                .buttonStyle(.borderless)
                 Spacer()
             }
             .padding(8)
@@ -147,49 +194,103 @@ struct SecretsView: View {
 
     private var entriesPanel: some View {
         VStack(spacing: 0) {
-            entriesToolbar
-            Divider()
-
-            if let error = errorMessage {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: { Text(error) }
-                .frame(maxHeight: .infinity)
-            } else if displayedEntries.isEmpty {
-                ContentUnavailableView {
-                    Label("No Secrets", systemImage: "key")
-                } description: { Text("Select a file or add one to get started") }
-                .frame(maxHeight: .infinity)
+            if let envSecret = selectedEnvSecret {
+                envSecretDetailPanel(for: envSecret)
             } else {
-                Table(displayedEntries, selection: $selectedEntryIDs) {
-                    TableColumn("Name") { entry in
-                        Text(entry.path).fontDesign(.monospaced)
-                    }
-                    .width(min: 120, ideal: 200)
+                entriesToolbar
+                Divider()
 
-                    TableColumn("Status") { entry in
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(colorForStatus(entry.status))
-                                .frame(width: 6, height: 6)
-                            Text(entry.status.rawValue)
-                                .font(.caption)
+                if let error = errorMessage {
+                    ContentUnavailableView {
+                        Label("Error", systemImage: "exclamationmark.triangle")
+                    } description: { Text(error) }
+                    .frame(maxHeight: .infinity)
+                } else if displayedEntries.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Secrets", systemImage: "key")
+                    } description: { Text("Select a file or add one to get started") }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    Table(displayedEntries, selection: $selectedEntryIDs) {
+                        TableColumn("Name") { entry in
+                            Text(entry.path).fontDesign(.monospaced)
                         }
-                    }
-                    .width(min: 80, ideal: 100)
+                        .width(min: 120, ideal: 200)
 
-                    TableColumn("Value") { entry in
-                        Text(entry.maskedValue)
-                            .fontDesign(.monospaced)
-                            .foregroundStyle(.secondary)
+                        TableColumn("Status") { entry in
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(colorForStatus(entry.status))
+                                    .frame(width: 6, height: 6)
+                                Text(entry.status.rawValue)
+                                    .font(.caption)
+                            }
+                        }
+                        .width(min: 80, ideal: 100)
+
+                        TableColumn("Value") { entry in
+                            Text(entry.maskedValue)
+                                .fontDesign(.monospaced)
+                                .foregroundStyle(.secondary)
+                        }
+                        .width(min: 200, ideal: 300)
                     }
-                    .width(min: 200, ideal: 300)
                 }
+
+                Divider()
+                summaryBar
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func envSecretDetailPanel(for secret: EnvSecret) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "key.fill")
+                    .foregroundStyle(.secondary)
+                Text(secret.name)
+                    .font(.system(.title3, design: .monospaced))
+                    .fontWeight(.semibold)
+                Spacer()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(secret.name, forType: .string)
+                } label: {
+                    Label("Copy name", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                Button(role: .destructive) {
+                    envSecretToRemove = secret
+                    showEnvRemoveConfirm = true
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+                .buttonStyle(.borderless)
             }
 
-            Divider()
-            summaryBar
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(.green)
+                    .frame(width: 6, height: 6)
+                Text("encrypted")
+                    .font(.caption)
+            }
+
+            Text("Value (truncated)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("ENC[age:••••••••")
+                .fontDesign(.monospaced)
+                .foregroundStyle(.secondary)
+
+            Text("Restart the workspace to apply changes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
         }
+        .padding()
     }
 
     private var entriesToolbar: some View {
@@ -274,6 +375,32 @@ struct SecretsView: View {
 
         guard let files = try? JSONDecoder().decode([FileInfo].self, from: data) else { return }
         secretFiles = files.map { SecretFile(path: $0.path, formatString: $0.format) }
+    }
+
+    private func loadEnvSecrets() async {
+        let cli = CLIService()
+        guard let result = try? await cli.run(
+            args: ["secret", "env", "list", "--json"],
+            workingDirectory: workspace.path
+        ), result.exitCode == 0 else {
+            return
+        }
+        let data = Data(result.stdout.utf8)
+        if let parsed = try? EnvSecret.decodeList(from: data) {
+            envSecrets = parsed
+        }
+    }
+
+    private func removeEnvSecret(_ secret: EnvSecret) async {
+        let cli = CLIService()
+        _ = try? await cli.run(
+            args: ["secret", "env", "remove", secret.name],
+            workingDirectory: workspace.path
+        )
+        await loadEnvSecrets()
+        if selectedFileID == secret.id {
+            selectedFileID = nil
+        }
     }
 
     private func loadEntriesForSelection(_ fileID: UUID?) async {
