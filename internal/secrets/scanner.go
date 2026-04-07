@@ -44,6 +44,15 @@ type ScanResult struct {
 }
 
 // ScanAll runs all scanners and merges their results.
+//
+// Merge semantics:
+//   - Mounts are concatenated in scanner order.
+//   - Mapping entries merge with last-write-wins on duplicate ciphertext keys.
+//   - Env entries are concatenated in scanner order. If two scanners emit the
+//     same Name, both entries are injected into the container and Docker
+//     resolves duplicates by taking the last value (scanner order matters).
+//     Today only EnvSecretScanner produces Env entries and config validation
+//     guarantees unique names within it, so this is a theoretical concern.
 func ScanAll(scanners []Scanner, opts ScanOpts) (*ScanResult, error) {
 	merged := &ScanResult{Mapping: make(map[string]string)}
 	for _, s := range scanners {

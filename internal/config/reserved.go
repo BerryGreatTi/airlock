@@ -9,8 +9,9 @@ package config
 var ReservedEnvNames = map[string]bool{
 	"HTTP_PROXY":  true,
 	"HTTPS_PROXY": true,
+	"NO_PROXY":    true,
 	"http_proxy":  true,
 	"https_proxy": true,
-	"NO_PROXY":    true,
+	"no_proxy":    true,
 	"LANG":        true,
 }

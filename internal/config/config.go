@@ -62,7 +62,7 @@ func IsValidEnvVarName(name string) bool {
 func validateEnvSecrets(cfg *Config) error {
 	seen := make(map[string]bool, len(cfg.EnvSecrets))
 	for i, es := range cfg.EnvSecrets {
-		if !envNameRegex.MatchString(es.Name) {
+		if !IsValidEnvVarName(es.Name) {
 			return fmt.Errorf("env secret at index %d: invalid name %q: must match %s", i, es.Name, EnvVarNamePattern)
 		}
 		if ReservedEnvNames[es.Name] {
