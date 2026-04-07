@@ -84,3 +84,32 @@ func TestScanAllNilResult(t *testing.T) {
 		t.Errorf("expected 0 mounts, got %d", len(result.Mounts))
 	}
 }
+
+func TestScanAllMergesEnv(t *testing.T) {
+	a := &mockScanner{
+		name: "a",
+		result: &ScanResult{
+			Env: []EnvVar{{Name: "FOO", Value: "ENC[age:AAA]"}},
+		},
+	}
+	b := &mockScanner{
+		name: "b",
+		result: &ScanResult{
+			Env: []EnvVar{{Name: "BAR", Value: "ENC[age:BBB]"}},
+		},
+	}
+	merged, err := ScanAll([]Scanner{a, b}, ScanOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(merged.Env) != 2 {
+		t.Fatalf("expected 2 env entries, got %d", len(merged.Env))
+	}
+	names := map[string]string{}
+	for _, e := range merged.Env {
+		names[e.Name] = e.Value
+	}
+	if names["FOO"] != "ENC[age:AAA]" || names["BAR"] != "ENC[age:BBB]" {
+		t.Errorf("unexpected merged env: %v", names)
+	}
+}

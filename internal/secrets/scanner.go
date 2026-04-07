@@ -26,10 +26,21 @@ type ShadowMount struct {
 	ContainerPath string // container path to shadow
 }
 
-// ScanResult holds the outputs from a scanner: shadow mounts and proxy mapping.
+// EnvVar is an environment variable to inject into the agent
+// container. Value is always an ENC[age:...] ciphertext; the proxy
+// substitutes it back to plaintext on the wire when the agent makes
+// outbound HTTP calls to non-passthrough hosts.
+type EnvVar struct {
+	Name  string
+	Value string
+}
+
+// ScanResult holds the outputs from a scanner: shadow mounts, proxy
+// mapping, and environment variables to inject into the agent container.
 type ScanResult struct {
 	Mounts  []ShadowMount
 	Mapping map[string]string // ENC[age:...] -> plaintext
+	Env     []EnvVar
 }
 
 // ScanAll runs all scanners and merges their results.
@@ -47,6 +58,7 @@ func ScanAll(scanners []Scanner, opts ScanOpts) (*ScanResult, error) {
 		for k, v := range result.Mapping {
 			merged.Mapping[k] = v
 		}
+		merged.Env = append(merged.Env, result.Env...)
 	}
 	return merged, nil
 }
