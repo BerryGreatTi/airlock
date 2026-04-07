@@ -102,6 +102,9 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 			fileScanner = secrets.NewFileScanner(cfg.SecretFiles, workspace)
 			scanners = append(scanners, fileScanner)
 		}
+		if len(cfg.EnvSecrets) > 0 {
+			scanners = append(scanners, secrets.NewEnvSecretScanner(cfg.EnvSecrets))
+		}
 		if envFile != "" && (fileScanner == nil || !fileScanner.ContainsPath(envFile)) {
 			scanners = append(scanners, secrets.NewEnvScanner(envFile, workspace))
 		}
@@ -123,6 +126,7 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 			return nil, fmt.Errorf("scan secrets: %w", err)
 		}
 		params.ShadowMounts = scanResult.Mounts
+		params.EnvSecrets = scanResult.Env
 		if len(scanResult.Mapping) > 0 {
 			mappingPath, mappingErr := secrets.SaveMapping(scanResult.Mapping, tmpDir)
 			if mappingErr != nil {
