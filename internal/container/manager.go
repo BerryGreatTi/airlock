@@ -27,6 +27,7 @@ type RunOpts struct {
 	CACertPath       string
 	ProxyPort        int
 	PassthroughHosts []string
+	EnvSecrets       []secrets.EnvVar
 }
 
 // Validate checks that required fields are present.
@@ -137,6 +138,18 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 		binds = append(binds, fmt.Sprintf("%s:%s:ro", m.HostPath, m.ContainerPath))
 	}
 
+	env := []string{
+		fmt.Sprintf("HTTP_PROXY=%s", proxyURL),
+		fmt.Sprintf("HTTPS_PROXY=%s", proxyURL),
+		fmt.Sprintf("http_proxy=%s", proxyURL),
+		fmt.Sprintf("https_proxy=%s", proxyURL),
+		"NO_PROXY=localhost,127.0.0.1",
+		"LANG=C.UTF-8",
+	}
+	for _, e := range opts.EnvSecrets {
+		env = append(env, fmt.Sprintf("%s=%s", e.Name, e.Value))
+	}
+
 	return ContainerConfig{
 		Image:      opts.Image,
 		Name:       claudeName,
@@ -146,15 +159,8 @@ func BuildClaudeConfig(opts RunOpts) ContainerConfig {
 		Stdin:      true,
 		Binds:      binds,
 		Mounts:     mounts,
-		Env: []string{
-			fmt.Sprintf("HTTP_PROXY=%s", proxyURL),
-			fmt.Sprintf("HTTPS_PROXY=%s", proxyURL),
-			fmt.Sprintf("http_proxy=%s", proxyURL),
-			fmt.Sprintf("https_proxy=%s", proxyURL),
-			"NO_PROXY=localhost,127.0.0.1",
-			"LANG=C.UTF-8",
-		},
-		CapDrop: []string{"ALL"},
-		Cmd:     []string{"claude", "--dangerouslySkipPermissions"},
+		Env:        env,
+		CapDrop:    []string{"ALL"},
+		Cmd:        []string{"claude", "--dangerouslySkipPermissions"},
 	}
 }
