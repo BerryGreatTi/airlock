@@ -188,3 +188,43 @@ func splitLines(s string) []string {
 	}
 	return lines
 }
+
+func TestEnvSecretsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.EnvSecrets = []config.EnvSecretConfig{
+		{Name: "GITHUB_TOKEN", Value: "ENC[age:AQIBAAABc29tZQ==]"},
+		{Name: "SLACK_BOT_TOKEN", Value: "ENC[age:AQIBAAACb3RoZXI=]"},
+	}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.EnvSecrets) != 2 {
+		t.Fatalf("expected 2 env secrets, got %d", len(loaded.EnvSecrets))
+	}
+	if loaded.EnvSecrets[0].Name != "GITHUB_TOKEN" {
+		t.Errorf("name[0] = %q, want GITHUB_TOKEN", loaded.EnvSecrets[0].Name)
+	}
+	if loaded.EnvSecrets[0].Value != "ENC[age:AQIBAAABc29tZQ==]" {
+		t.Errorf("value[0] = %q, want ENC[age:...]", loaded.EnvSecrets[0].Value)
+	}
+}
+
+func TestEnvSecretsBackwardsCompat(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.EnvSecrets != nil {
+		t.Errorf("expected nil EnvSecrets for old config, got %v", loaded.EnvSecrets)
+	}
+}

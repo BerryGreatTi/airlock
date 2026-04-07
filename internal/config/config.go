@@ -16,6 +16,15 @@ type SecretFileConfig struct {
 	EncryptKeys []string `yaml:"encrypt_keys,omitempty"` // keys to encrypt; empty = encrypt all
 }
 
+// EnvSecretConfig is a single encrypted environment variable that
+// airlock injects into the agent container as NAME=ENC[age:...].
+// Value is always an ENC[age:...] ciphertext; plaintext is never
+// persisted in config.yaml.
+type EnvSecretConfig struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
+}
+
 type Config struct {
 	ContainerImage   string             `yaml:"container_image"`
 	ProxyImage       string             `yaml:"proxy_image"`
@@ -24,6 +33,7 @@ type Config struct {
 	PassthroughHosts []string           `yaml:"passthrough_hosts"`
 	VolumeName       string             `yaml:"volume_name"`
 	SecretFiles      []SecretFileConfig `yaml:"secret_files,omitempty"`
+	EnvSecrets       []EnvSecretConfig  `yaml:"env_secrets,omitempty"`
 }
 
 func Default() Config {
