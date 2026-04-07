@@ -31,7 +31,6 @@ func RunSecretEnvAdd(name, value string, force bool, airlockDir string) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	// Validation done up-front so we never call Encrypt on a bad name.
 	if !config.IsValidEnvVarName(name) {
 		return fmt.Errorf("invalid name %q: must match %s", name, config.EnvVarNamePattern)
 	}
@@ -39,7 +38,6 @@ func RunSecretEnvAdd(name, value string, force bool, airlockDir string) error {
 		return fmt.Errorf("env secret name %q is reserved by airlock", name)
 	}
 
-	// Encrypt or accept already-wrapped.
 	var stored string
 	if crypto.IsEncrypted(value) {
 		stored = value

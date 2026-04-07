@@ -1,4 +1,3 @@
-// internal/config/reserved.go
 package config
 
 // ReservedEnvNames lists environment variables that airlock itself

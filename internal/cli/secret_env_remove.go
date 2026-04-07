@@ -25,7 +25,7 @@ func RunSecretEnvRemove(name, airlockDir string) error {
 		filtered = append(filtered, es)
 	}
 	if !found {
-		return fmt.Errorf("no such env secret: %s", name)
+		return fmt.Errorf("no such env secret: %q", name)
 	}
 	cfg.EnvSecrets = filtered
 	if err := config.Save(cfg, airlockDir); err != nil {

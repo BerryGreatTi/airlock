@@ -37,7 +37,7 @@ func RunSecretEnvShow(name, airlockDir string, asJSON bool) ([]byte, error) {
 		out := fmt.Sprintf("name: %s\nencrypted: true\nvalue: %s...\n", es.Name, prefix)
 		return []byte(out), nil
 	}
-	return nil, fmt.Errorf("no such env secret: %s", name)
+	return nil, fmt.Errorf("no such env secret: %q", name)
 }
 
 var secretEnvShowJSON bool
@@ -51,10 +51,7 @@ var secretEnvShowCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Print(string(out))
-		if len(out) > 0 && out[len(out)-1] != '\n' {
-			fmt.Println()
-		}
+		printWithTrailingNewline(out)
 		return nil
 	},
 }

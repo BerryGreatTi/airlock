@@ -58,10 +58,7 @@ var secretEnvListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Print(string(out))
-		if len(out) > 0 && out[len(out)-1] != '\n' {
-			fmt.Println()
-		}
+		printWithTrailingNewline(out)
 		return nil
 	},
 }
