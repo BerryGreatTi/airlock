@@ -24,6 +24,10 @@
 | `airlock secret encrypt <file>` | Encrypt keys (`--keys`, `--all`, or `--auto`) |
 | `airlock secret decrypt <file>` | Decrypt keys (`--keys` or `--all`) |
 | `airlock secret remove <file>` | Unregister a secret file |
+| `airlock secret env add <name>` | Register an environment variable secret (TTY prompt, or `--value`/`--stdin`; `--force` to overwrite) |
+| `airlock secret env list [--json]` | List registered env secret names |
+| `airlock secret env show <name> [--json]` | Show env secret metadata (truncated ciphertext prefix; never decrypts) |
+| `airlock secret env remove <name>` | Unregister an env secret |
 
 ## Architecture
 
