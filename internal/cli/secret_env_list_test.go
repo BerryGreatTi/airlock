@@ -23,6 +23,44 @@ func TestSecretEnvListEmpty(t *testing.T) {
 	}
 }
 
+func TestSecretEnvListHumanEmpty(t *testing.T) {
+	_, _, airlockDir := setupAirlock(t)
+	out, err := cli.RunSecretEnvList(airlockDir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "No env secrets registered") {
+		t.Errorf("human empty output = %q, want a 'No env secrets' message", out)
+	}
+}
+
+func TestSecretEnvListHumanWithEntries(t *testing.T) {
+	_, _, airlockDir := setupAirlock(t)
+	if err := cli.RunSecretEnvAdd("BETA", "v", false, airlockDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := cli.RunSecretEnvAdd("ALPHA", "v", false, airlockDir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := cli.RunSecretEnvList(airlockDir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if !strings.Contains(s, "NAME") {
+		t.Errorf("human output missing NAME header: %q", s)
+	}
+	// Sorted: ALPHA must appear before BETA.
+	alphaIdx := strings.Index(s, "ALPHA")
+	betaIdx := strings.Index(s, "BETA")
+	if alphaIdx == -1 || betaIdx == -1 {
+		t.Fatalf("both names should appear in output: %q", s)
+	}
+	if alphaIdx > betaIdx {
+		t.Errorf("human output not sorted: ALPHA at %d, BETA at %d", alphaIdx, betaIdx)
+	}
+}
+
 func TestSecretEnvListJSONSorted(t *testing.T) {
 	_, _, airlockDir := setupAirlock(t)
 	if err := cli.RunSecretEnvAdd("ZULU", "v", false, airlockDir); err != nil {

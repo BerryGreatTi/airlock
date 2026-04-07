@@ -41,6 +41,30 @@ func TestSecretEnvShowJSONNoPlaintext(t *testing.T) {
 	}
 }
 
+func TestSecretEnvShowHumanNoPlaintext(t *testing.T) {
+	_, _, airlockDir := setupAirlock(t)
+	if err := cli.RunSecretEnvAdd("GITHUB_TOKEN", "ghp_super_secret_xyz", false, airlockDir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := cli.RunSecretEnvShow("GITHUB_TOKEN", airlockDir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if strings.Contains(s, "ghp_super_secret_xyz") {
+		t.Errorf("human show output contains plaintext: %s", s)
+	}
+	if !strings.Contains(s, "name: GITHUB_TOKEN") {
+		t.Errorf("human output missing name: %s", s)
+	}
+	if !strings.Contains(s, "encrypted: true") {
+		t.Errorf("human output missing encrypted flag: %s", s)
+	}
+	if !strings.Contains(s, "ENC[age:") {
+		t.Errorf("human output missing ciphertext prefix: %s", s)
+	}
+}
+
 func TestSecretEnvShowUnknown(t *testing.T) {
 	_, _, airlockDir := setupAirlock(t)
 	_, err := cli.RunSecretEnvShow("NOPE", airlockDir, true)
