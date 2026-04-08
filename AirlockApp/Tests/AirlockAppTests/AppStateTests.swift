@@ -65,16 +65,19 @@ final class AppStateTests: XCTestCase {
         global.containerImage = "default:v1"
         global.proxyImage = "default-proxy:v1"
         global.passthroughHosts = ["host1.com"]
+        global.enabledMCPServers = ["slack", "github", "jira"]
         var ws = Workspace(name: "test", path: "/tmp")
         ws.containerImageOverride = "custom:v2"
         ws.proxyImageOverride = "custom-proxy:v2"
         ws.passthroughHostsOverride = ["host2.com"]
         ws.proxyPortOverride = 9090
+        ws.enabledMCPServersOverride = ["slack"]
         let resolved = ResolvedSettings(global: global, workspace: ws)
         XCTAssertEqual(resolved.containerImage, "custom:v2")
         XCTAssertEqual(resolved.proxyImage, "custom-proxy:v2")
         XCTAssertEqual(resolved.passthroughHosts, ["host2.com"])
         XCTAssertEqual(resolved.proxyPort, 9090)
+        XCTAssertEqual(resolved.enabledMCPServers, ["slack"])
     }
 
     func testResolvedSettingsFallsBackToGlobal() {
@@ -82,12 +85,32 @@ final class AppStateTests: XCTestCase {
         global.containerImage = "global:latest"
         global.proxyImage = "global-proxy:latest"
         global.passthroughHosts = ["api.example.com"]
+        global.enabledMCPServers = ["slack"]
         let ws = Workspace(name: "test", path: "/tmp")
         let resolved = ResolvedSettings(global: global, workspace: ws)
         XCTAssertEqual(resolved.containerImage, "global:latest")
         XCTAssertEqual(resolved.proxyImage, "global-proxy:latest")
         XCTAssertEqual(resolved.passthroughHosts, ["api.example.com"])
         XCTAssertEqual(resolved.proxyPort, 8080)
+        XCTAssertEqual(resolved.enabledMCPServers, ["slack"])
+    }
+
+    func testResolvedSettingsNilMCPMeansAllEnabled() {
+        // Both global and workspace nil => nil (meaning: do not filter, keep all MCPs)
+        let global = AppSettings()
+        let ws = Workspace(name: "test", path: "/tmp")
+        let resolved = ResolvedSettings(global: global, workspace: ws)
+        XCTAssertNil(resolved.enabledMCPServers)
+    }
+
+    func testResolvedSettingsEmptyOverrideMeansNoneEnabled() {
+        // Workspace explicitly sets empty array => empty (filter out all MCPs)
+        var global = AppSettings()
+        global.enabledMCPServers = ["slack"]
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.enabledMCPServersOverride = []
+        let resolved = ResolvedSettings(global: global, workspace: ws)
+        XCTAssertEqual(resolved.enabledMCPServers, [])
     }
 
     func testDetailTabCases() {

@@ -190,6 +190,62 @@ func splitLines(s string) []string {
 	return lines
 }
 
+func TestEnabledMCPServersRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.EnabledMCPServers = []string{"slack", "github"}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.EnabledMCPServers) != 2 {
+		t.Fatalf("expected 2 enabled MCP servers, got %d", len(loaded.EnabledMCPServers))
+	}
+	if loaded.EnabledMCPServers[0] != "slack" || loaded.EnabledMCPServers[1] != "github" {
+		t.Errorf("unexpected MCP server list: %v", loaded.EnabledMCPServers)
+	}
+}
+
+func TestEnabledMCPServersBackwardsCompat(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.EnabledMCPServers != nil {
+		t.Errorf("expected nil EnabledMCPServers for old config (no filtering), got %v", loaded.EnabledMCPServers)
+	}
+}
+
+func TestEnabledMCPServersEmptyRoundTripPreserved(t *testing.T) {
+	// Empty slice means "filter out all MCPs" — the security-relevant state.
+	// It must round-trip through Save/Load as a non-nil empty slice, NOT
+	// collapse to nil (which would mean "no filtering").
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.EnabledMCPServers = []string{}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.EnabledMCPServers == nil {
+		t.Fatal("expected non-nil empty slice (filter all), got nil (no filtering) — security regression")
+	}
+	if len(loaded.EnabledMCPServers) != 0 {
+		t.Errorf("expected empty slice, got %v", loaded.EnabledMCPServers)
+	}
+}
+
 func TestEnvSecretsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Default()

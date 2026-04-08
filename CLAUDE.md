@@ -28,6 +28,8 @@
 | `airlock secret env list [--json]` | List registered env secret names |
 | `airlock secret env show <name> [--json]` | Show env secret metadata (truncated ciphertext prefix; never decrypts) |
 | `airlock secret env remove <name>` | Unregister an env secret |
+| `airlock run --enabled-mcps slack,github` | Restrict the agent container to a subset of MCP servers (allow-list). Empty value with the flag disables all MCPs. Omit the flag entirely to keep all MCPs from `settings.json`. |
+| `airlock start --enabled-mcps slack,github` | Same allow-list semantic for the GUI-driven detached `start` command |
 
 ## Architecture
 
@@ -63,6 +65,7 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - In SwiftUI views that take `let workspace: Workspace`, custom `Binding` getters must read from `appState.workspaces` (the source of truth), not the `let workspace` parameter. The parameter is a snapshot captured at view creation -- the getter returns the stale value after the setter mutates `appState.workspaces[idx]`, causing TextFields to revert on keystroke.
 - The `.app` bundle embeds the Go CLI at `Contents/MacOS/airlock` (sibling to the Swift binary). `CLIService.resolveAirlockBinary()` checks this path via `Bundle.main.executableURL` before falling back to `$PATH`. See [ADR-0009](docs/decisions/ADR-0009-macos-app-bundling.md).
 - Icon Canvas drawing logic exists in TWO files: `AirlockApp/Sources/AirlockApp/Views/AppIconView.swift` (runtime dock icon) and `scripts/generate-icon-main.swift` (build-time `.icns` generation). Visual changes must be made in both. Duplication is required because the SPM `@main` executable target cannot be imported as a library.
+- `Config.EnabledMCPServers` uses a tri-state: `nil` = no filtering (default, all MCPs enabled), `[]` = filter all (no MCPs), `[..]` = allow only the listed names. The YAML tag intentionally omits `omitempty` because yaml.v3 collapses both nil and empty slices on Save/Load, which would silently flip the security-relevant "filter all" state to "no filtering". The scanner filter runs BEFORE the secret-encryption loop in `scanner_claude.go` so secrets of disabled MCPs never enter the proxy mapping. Reordering those two blocks would leak plaintext credentials.
 
 ## Documentation
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,12 +16,13 @@ import (
 )
 
 var (
-	runWorkspace        string
-	runEnvFile          string
-	runPassthroughHosts string
-	runProxyPort        int
-	runContainerImage   string
-	runProxyImage       string
+	runWorkspace         string
+	runEnvFile           string
+	runPassthroughHosts  string
+	runProxyPort         int
+	runContainerImage    string
+	runProxyImage        string
+	runEnabledMCPServers string
 )
 
 var runCmd = &cobra.Command{
@@ -43,18 +43,10 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		}
 
 		if cmd.Flags().Changed("passthrough-hosts") {
-			if runPassthroughHosts == "" {
-				cfg.PassthroughHosts = nil
-			} else {
-				hosts := strings.Split(runPassthroughHosts, ",")
-				trimmed := make([]string, 0, len(hosts))
-				for _, h := range hosts {
-					if s := strings.TrimSpace(h); s != "" {
-						trimmed = append(trimmed, s)
-					}
-				}
-				cfg.PassthroughHosts = trimmed
-			}
+			cfg.PassthroughHosts = parseCSVList(runPassthroughHosts)
+		}
+		if cmd.Flags().Changed("enabled-mcps") {
+			cfg.EnabledMCPServers = parseCSVList(runEnabledMCPServers)
 		}
 
 		if cmd.Flags().Changed("proxy-port") && runProxyPort > 0 {
@@ -134,6 +126,7 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 				TmpDir:            tmpDir,
 				VolumeSettingsDir: volSettingsDir,
 				ContainerWorkDir:  fmt.Sprintf("/workspace/%s", wsName),
+				EnabledMCPServers: cfg.EnabledMCPServers,
 			})
 			if err != nil {
 				return fmt.Errorf("scan secrets: %w", err)
@@ -162,5 +155,6 @@ func init() {
 	runCmd.Flags().IntVar(&runProxyPort, "proxy-port", 0, "proxy listening port (overrides config, default 8080)")
 	runCmd.Flags().StringVar(&runContainerImage, "container-image", "", "container image (overrides config)")
 	runCmd.Flags().StringVar(&runProxyImage, "proxy-image", "", "proxy image (overrides config)")
+	runCmd.Flags().StringVar(&runEnabledMCPServers, "enabled-mcps", "", "comma-separated MCP server allow-list (overrides config). Empty value with this flag = disable all MCPs.")
 	rootCmd.AddCommand(runCmd)
 }

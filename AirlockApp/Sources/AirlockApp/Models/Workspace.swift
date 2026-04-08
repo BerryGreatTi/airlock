@@ -9,6 +9,7 @@ struct Workspace: Identifiable, Codable, Hashable {
     var proxyImageOverride: String?
     var passthroughHostsOverride: [String]?
     var proxyPortOverride: Int?
+    var enabledMCPServersOverride: [String]?
 
     // Runtime state (not persisted)
     var isActive: Bool = false
@@ -20,6 +21,7 @@ struct Workspace: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, name, path, envFilePath, containerImageOverride
         case proxyImageOverride, passthroughHostsOverride, proxyPortOverride
+        case enabledMCPServersOverride
     }
 
     init(from decoder: Decoder) throws {
@@ -32,6 +34,7 @@ struct Workspace: Identifiable, Codable, Hashable {
         proxyImageOverride = try container.decodeIfPresent(String.self, forKey: .proxyImageOverride)
         passthroughHostsOverride = try container.decodeIfPresent([String].self, forKey: .passthroughHostsOverride)
         proxyPortOverride = try container.decodeIfPresent(Int.self, forKey: .proxyPortOverride)
+        enabledMCPServersOverride = try container.decodeIfPresent([String].self, forKey: .enabledMCPServersOverride)
     }
 
     var shortID: String {

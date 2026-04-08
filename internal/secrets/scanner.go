@@ -17,6 +17,12 @@ type ScanOpts struct {
 	TmpDir            string
 	VolumeSettingsDir string // when set, read global settings from this dir instead of HomeDir
 	ContainerWorkDir  string // container-side workspace path (e.g., /workspace/my-app)
+
+	// EnabledMCPServers, when non-nil, filters mcpServers in Claude settings
+	// files to only the named entries before they reach the agent container.
+	// nil = do not filter (keep all MCP servers from settings.json).
+	// empty slice = filter out all MCP servers.
+	EnabledMCPServers []string
 }
 
 // ShadowMount describes a file-level Docker bind mount that shadows

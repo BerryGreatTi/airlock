@@ -28,6 +28,12 @@ final class ContainerSessionService {
         args += ["--proxy-port", String(resolved.proxyPort)]
         args += ["--container-image", resolved.containerImage]
         args += ["--proxy-image", resolved.proxyImage]
+        // Only pass --enabled-mcps when an explicit allow-list is set; nil
+        // means "no filtering" and we leave the flag off so the Go CLI keeps
+        // the existing behavior of forwarding all MCPs from settings.json.
+        if let mcpAllowlist = resolved.enabledMCPServers {
+            args += ["--enabled-mcps", mcpAllowlist.joined(separator: ",")]
+        }
         let result = try await cli.run(args: args, workingDirectory: workspace.path)
         if result.exitCode != 0 {
             throw NSError(

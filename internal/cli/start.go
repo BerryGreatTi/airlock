@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -25,10 +24,28 @@ type StartResult struct {
 	Network   string `json:"network"`
 }
 
+// StartOptions bundles per-flag overrides applied on top of config.yaml.
+// An *Override bool field is used for flags whose presence (vs. value) is
+// significant — e.g., an empty PassthroughHosts string with the override flag
+// clears the config list, while no flag at all preserves it.
+type StartOptions struct {
+	ID                  string
+	Workspace           string
+	EnvFile             string
+	PassthroughHosts    string
+	PassthroughOverride bool
+	ProxyPort           int
+	ContainerImage      string
+	ProxyImage          string
+	EnabledMCPServers   string
+	MCPOverride         bool
+}
+
 // RunStart encapsulates the start logic so it can be tested without cobra.
-// When passthroughOverride is true, passthroughHosts replaces config.yaml
-// (even if empty, which clears the list).
-func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, workspace, envFile, airlockDir, passthroughHosts string, passthroughOverride bool, proxyPort int, containerImage, proxyImage string) (*StartResult, error) {
+// When PassthroughOverride is true, PassthroughHosts replaces config.yaml
+// (even if empty, which clears the list). Same semantic for MCPOverride and
+// EnabledMCPServers.
+func RunStart(ctx context.Context, runtime container.ContainerRuntime, airlockDir string, opts StartOptions) (*StartResult, error) {
 	keysDir := filepath.Join(airlockDir, "keys")
 
 	cfg, err := config.Load(airlockDir)
@@ -36,30 +53,26 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 		return nil, fmt.Errorf("load config (run 'airlock init' first): %w", err)
 	}
 
-	if passthroughOverride {
-		if passthroughHosts == "" {
-			cfg.PassthroughHosts = nil
-		} else {
-			hosts := strings.Split(passthroughHosts, ",")
-			trimmed := make([]string, 0, len(hosts))
-			for _, h := range hosts {
-				if s := strings.TrimSpace(h); s != "" {
-					trimmed = append(trimmed, s)
-				}
-			}
-			cfg.PassthroughHosts = trimmed
-		}
+	if opts.PassthroughOverride {
+		cfg.PassthroughHosts = parseCSVList(opts.PassthroughHosts)
+	}
+	if opts.MCPOverride {
+		cfg.EnabledMCPServers = parseCSVList(opts.EnabledMCPServers)
 	}
 
-	if proxyPort > 0 {
-		cfg.ProxyPort = proxyPort
+	if opts.ProxyPort > 0 {
+		cfg.ProxyPort = opts.ProxyPort
 	}
-	if containerImage != "" {
-		cfg.ContainerImage = containerImage
+	if opts.ContainerImage != "" {
+		cfg.ContainerImage = opts.ContainerImage
 	}
-	if proxyImage != "" {
-		cfg.ProxyImage = proxyImage
+	if opts.ProxyImage != "" {
+		cfg.ProxyImage = opts.ProxyImage
 	}
+
+	id := opts.ID
+	workspace := opts.Workspace
+	envFile := opts.EnvFile
 
 	if workspace == "" {
 		workspace, _ = os.Getwd()
@@ -121,6 +134,7 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 			TmpDir:            tmpDir,
 			VolumeSettingsDir: volSettingsDir,
 			ContainerWorkDir:  fmt.Sprintf("/workspace/%s", wsName),
+			EnabledMCPServers: cfg.EnabledMCPServers,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("scan secrets: %w", err)
@@ -151,13 +165,14 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, id, works
 }
 
 var (
-	startID               string
-	startWorkspace        string
-	startEnvFile          string
-	startPassthroughHosts string
-	startProxyPort        int
-	startContainerImage   string
-	startProxyImage       string
+	startID                string
+	startWorkspace         string
+	startEnvFile           string
+	startPassthroughHosts  string
+	startProxyPort         int
+	startContainerImage    string
+	startProxyImage        string
+	startEnabledMCPServers string
 )
 
 var startCmd = &cobra.Command{
@@ -176,7 +191,18 @@ Requires --id to identify this session.`,
 		}
 		defer docker.Close()
 
-		result, err := RunStart(ctx, docker, startID, startWorkspace, startEnvFile, ".airlock", startPassthroughHosts, cmd.Flags().Changed("passthrough-hosts"), startProxyPort, startContainerImage, startProxyImage)
+		result, err := RunStart(ctx, docker, ".airlock", StartOptions{
+			ID:                  startID,
+			Workspace:           startWorkspace,
+			EnvFile:             startEnvFile,
+			PassthroughHosts:    startPassthroughHosts,
+			PassthroughOverride: cmd.Flags().Changed("passthrough-hosts"),
+			ProxyPort:           startProxyPort,
+			ContainerImage:      startContainerImage,
+			ProxyImage:          startProxyImage,
+			EnabledMCPServers:   startEnabledMCPServers,
+			MCPOverride:         cmd.Flags().Changed("enabled-mcps"),
+		})
 		if err != nil {
 			return err
 		}
@@ -196,5 +222,6 @@ func init() {
 	startCmd.Flags().IntVar(&startProxyPort, "proxy-port", 0, "proxy listening port (overrides config, default 8080)")
 	startCmd.Flags().StringVar(&startContainerImage, "container-image", "", "container image (overrides config)")
 	startCmd.Flags().StringVar(&startProxyImage, "proxy-image", "", "proxy image (overrides config)")
+	startCmd.Flags().StringVar(&startEnabledMCPServers, "enabled-mcps", "", "comma-separated MCP server allow-list (overrides config). Empty value with this flag = disable all MCPs.")
 	rootCmd.AddCommand(startCmd)
 }

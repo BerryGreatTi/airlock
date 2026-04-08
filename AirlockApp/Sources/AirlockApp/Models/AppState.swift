@@ -181,6 +181,7 @@ struct AppSettings: Codable, Equatable {
     var containerImage: String = "airlock-claude:latest"
     var proxyImage: String = "airlock-proxy:latest"
     var passthroughHosts: [String] = ["api.anthropic.com", "auth.anthropic.com"]
+    var enabledMCPServers: [String]?
     var theme: AppTheme = .system
     var terminal: TerminalSettings = TerminalSettings()
 
@@ -192,6 +193,7 @@ struct AppSettings: Codable, Equatable {
         containerImage = try container.decodeIfPresent(String.self, forKey: .containerImage) ?? "airlock-claude:latest"
         proxyImage = try container.decodeIfPresent(String.self, forKey: .proxyImage) ?? "airlock-proxy:latest"
         passthroughHosts = try container.decodeIfPresent([String].self, forKey: .passthroughHosts) ?? ["api.anthropic.com", "auth.anthropic.com"]
+        enabledMCPServers = try container.decodeIfPresent([String].self, forKey: .enabledMCPServers)
         theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .system
         terminal = try container.decodeIfPresent(TerminalSettings.self, forKey: .terminal) ?? TerminalSettings()
     }
@@ -202,11 +204,13 @@ struct ResolvedSettings: Sendable {
     let proxyImage: String
     let passthroughHosts: [String]
     let proxyPort: Int
+    let enabledMCPServers: [String]?
 
     init(global: AppSettings, workspace: Workspace) {
         self.containerImage = workspace.containerImageOverride ?? global.containerImage
         self.proxyImage = workspace.proxyImageOverride ?? global.proxyImage
         self.passthroughHosts = workspace.passthroughHostsOverride ?? global.passthroughHosts
         self.proxyPort = workspace.proxyPortOverride ?? 8080
+        self.enabledMCPServers = workspace.enabledMCPServersOverride ?? global.enabledMCPServers
     }
 }

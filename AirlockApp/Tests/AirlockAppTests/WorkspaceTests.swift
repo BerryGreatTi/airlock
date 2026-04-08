@@ -43,6 +43,7 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertNil(ws.proxyImageOverride)
         XCTAssertNil(ws.passthroughHostsOverride)
         XCTAssertNil(ws.proxyPortOverride)
+        XCTAssertNil(ws.enabledMCPServersOverride)
     }
 
     func testOverrideFieldsPersisted() throws {
@@ -50,11 +51,24 @@ final class WorkspaceTests: XCTestCase {
         ws.proxyImageOverride = "custom-proxy:v2"
         ws.passthroughHostsOverride = ["api.example.com"]
         ws.proxyPortOverride = 9090
+        ws.enabledMCPServersOverride = ["slack", "github"]
         let data = try JSONEncoder().encode(ws)
         let decoded = try JSONDecoder().decode(Workspace.self, from: data)
         XCTAssertEqual(decoded.proxyImageOverride, "custom-proxy:v2")
         XCTAssertEqual(decoded.passthroughHostsOverride, ["api.example.com"])
         XCTAssertEqual(decoded.proxyPortOverride, 9090)
+        XCTAssertEqual(decoded.enabledMCPServersOverride, ["slack", "github"])
+    }
+
+    func testEmptyMCPOverrideMeansNoneEnabled() throws {
+        // Empty array is a valid explicit override (none enabled),
+        // distinct from nil (inherit global).
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.enabledMCPServersOverride = []
+        let data = try JSONEncoder().encode(ws)
+        let decoded = try JSONDecoder().decode(Workspace.self, from: data)
+        XCTAssertNotNil(decoded.enabledMCPServersOverride)
+        XCTAssertEqual(decoded.enabledMCPServersOverride, [])
     }
 
     func testBackwardsCompatDecoding() throws {
@@ -68,6 +82,7 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertNil(decoded.proxyImageOverride)
         XCTAssertNil(decoded.passthroughHostsOverride)
         XCTAssertNil(decoded.proxyPortOverride)
+        XCTAssertNil(decoded.enabledMCPServersOverride)
     }
 
     func testTerminalSessionCreation() {
