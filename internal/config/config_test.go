@@ -246,6 +246,62 @@ func TestEnabledMCPServersEmptyRoundTripPreserved(t *testing.T) {
 	}
 }
 
+func TestNetworkAllowlistRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.NetworkAllowlist = []string{"api.github.com", "*.stripe.com"}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.NetworkAllowlist) != 2 {
+		t.Fatalf("expected 2 allow-list entries, got %d", len(loaded.NetworkAllowlist))
+	}
+	if loaded.NetworkAllowlist[0] != "api.github.com" || loaded.NetworkAllowlist[1] != "*.stripe.com" {
+		t.Errorf("unexpected allow-list: %v", loaded.NetworkAllowlist)
+	}
+}
+
+func TestNetworkAllowlistBackwardsCompat(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.NetworkAllowlist != nil {
+		t.Errorf("expected nil NetworkAllowlist for old config (allow all), got %v", loaded.NetworkAllowlist)
+	}
+}
+
+func TestNetworkAllowlistEmptyCollapsesToNil(t *testing.T) {
+	// Unlike EnabledMCPServers, the allow-list has only two states: empty
+	// (allow all, back-compat default) and populated (restrict). `omitempty`
+	// collapses empty → nil on Save/Load, which is semantically equivalent
+	// to "allow all" and therefore safe. This test pins that behavior so
+	// future changes that introduce a third state ("block all") notice and
+	// remove omitempty.
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.NetworkAllowlist = []string{}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.NetworkAllowlist != nil {
+		t.Errorf("expected nil NetworkAllowlist after round-trip (empty = allow all), got %v", loaded.NetworkAllowlist)
+	}
+}
+
 func TestEnvSecretsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Default()

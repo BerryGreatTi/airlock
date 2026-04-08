@@ -30,6 +30,8 @@
 | `airlock secret env remove <name>` | Unregister an env secret |
 | `airlock run --enabled-mcps slack,github` | Restrict the agent container to a subset of MCP servers (allow-list). Empty value with the flag disables all MCPs. Omit the flag entirely to keep all MCPs from `settings.json`. |
 | `airlock start --enabled-mcps slack,github` | Same allow-list semantic for the GUI-driven detached `start` command |
+| `airlock run --network-allowlist api.github.com,*.stripe.com` | Restrict outbound HTTP/HTTPS to the listed hosts. Supports exact match and `*.example.com` suffix wildcards. Empty value or omitted flag = allow all. |
+| `airlock start --network-allowlist api.github.com,*.stripe.com` | Same semantic for the GUI-driven detached `start` command |
 
 ## Architecture
 
@@ -66,6 +68,7 @@ The Go CLI (`cmd/airlock/`) orchestrates both containers. Container management i
 - The `.app` bundle embeds the Go CLI at `Contents/MacOS/airlock` (sibling to the Swift binary). `CLIService.resolveAirlockBinary()` checks this path via `Bundle.main.executableURL` before falling back to `$PATH`. See [ADR-0009](docs/decisions/ADR-0009-macos-app-bundling.md).
 - Icon Canvas drawing logic exists in TWO files: `AirlockApp/Sources/AirlockApp/Views/AppIconView.swift` (runtime dock icon) and `scripts/generate-icon-main.swift` (build-time `.icns` generation). Visual changes must be made in both. Duplication is required because the SPM `@main` executable target cannot be imported as a library.
 - `Config.EnabledMCPServers` uses a tri-state: `nil` = no filtering (default, all MCPs enabled), `[]` = filter all (no MCPs), `[..]` = allow only the listed names. The YAML tag intentionally omits `omitempty` because yaml.v3 collapses both nil and empty slices on Save/Load, which would silently flip the security-relevant "filter all" state to "no filtering". The scanner filter runs BEFORE the secret-encryption loop in `scanner_claude.go` so secrets of disabled MCPs never enter the proxy mapping. Reordering those two blocks would leak plaintext credentials.
+- `Config.NetworkAllowlist` is two-state (empty/nil = allow all HTTP, populated = restrict) and uses `omitempty` because the empty → nil collapse is semantically safe. Enforced in `proxy/addon/decrypt_proxy.py:is_allowed` BEFORE the passthrough classification — reordering would let users accidentally exempt blocked hosts by adding them to passthrough. The Swift `NetworkAllowlistPolicy` mirrors the Python `is_allowed` logic so the GUI's Anthropic guardrail preview and the runtime enforcement agree on case-insensitivity and `*.example.com` anchoring. See [ADR-0011](docs/decisions/ADR-0011-network-allowlist.md).
 
 ## Documentation
 

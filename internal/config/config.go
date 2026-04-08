@@ -47,6 +47,14 @@ type Config struct {
 	// silently flip the security-relevant "filter all" state ([]) to
 	// "no filtering" (nil) on a save/load round-trip.
 	EnabledMCPServers []string `yaml:"enabled_mcp_servers"`
+	// NetworkAllowlist restricts outbound HTTP/HTTPS traffic from the agent
+	// container to a user-defined list of hosts, enforced in the mitmproxy
+	// addon. Supported patterns: exact host (`api.stripe.com`) and suffix
+	// wildcard (`*.stripe.com`, which matches subdomains but NOT the bare
+	// `stripe.com`). Empty list / nil = allow all HTTP traffic (back-compat).
+	// Only HTTP/HTTPS protocols are enforced; non-HTTP traffic is already
+	// blocked by the internal Docker network.
+	NetworkAllowlist []string `yaml:"network_allowlist,omitempty"`
 }
 
 // EnvVarNamePattern is the POSIX env var identifier pattern. Exported so

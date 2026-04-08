@@ -14,6 +14,9 @@ struct GlobalSettingsSheet: View {
     @State private var discoveredMCPServers: [String] = []
     @State private var restrictMCPServers = false
     @State private var enabledMCPSelection: Set<String> = []
+    @State private var restrictNetworkAllowlist = false
+    @State private var networkAllowlistText = ""
+    @State private var showAllowlistAnthropicConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,29 +68,16 @@ struct GlobalSettingsSheet: View {
                 }
 
                 Section("Network Defaults") {
-                    Text("Default passthrough hosts (skip proxy decryption, one per line)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextEditor(text: $passthroughText)
-                        .font(.system(size: 12, design: .monospaced))
-                        .frame(height: 80)
-
-                    let missing = PassthroughPolicy.missingProtectedHosts(
-                        from: PassthroughPolicy.splitHostLines(passthroughText)
-                    )
-                    if !missing.isEmpty {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.yellow)
-                            Text("Removing \(missing.joined(separator: ", ")) from passthrough means Airlock will decrypt secrets in requests to Anthropic. Your plaintext credentials will be sent to Anthropic's servers. This defeats the purpose of Airlock — only remove for testing.")
-                                .font(.caption)
-                                .foregroundStyle(.yellow)
-                                .fixedSize(horizontal: false, vertical: true)
+                    HostListEditor(
+                        caption: "Default passthrough hosts (skip proxy decryption, one per line)",
+                        text: $passthroughText,
+                        missingHosts: PassthroughPolicy.missingProtectedHosts(
+                            from: PassthroughPolicy.splitHostLines(passthroughText)
+                        ),
+                        warningText: { joined in
+                            "Removing \(joined) from passthrough means Airlock will decrypt secrets in requests to Anthropic. Your plaintext credentials will be sent to Anthropic's servers. This defeats the purpose of Airlock — only remove for testing."
                         }
-                        .padding(8)
-                        .background(Color.yellow.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
+                    )
                 }
 
                 Section("MCP Servers") {
@@ -105,6 +95,26 @@ struct GlobalSettingsSheet: View {
                         if !newValue {
                             enabledMCPSelection = []
                         }
+                    }
+                }
+
+                Section("Network Allow-list") {
+                    Toggle("Restrict outbound hosts", isOn: $restrictNetworkAllowlist)
+                    if restrictNetworkAllowlist {
+                        HostListEditor(
+                            caption: "Only the listed hosts can receive outbound HTTP/HTTPS traffic. Use `*.example.com` for subdomain wildcards. One entry per line.",
+                            text: $networkAllowlistText,
+                            missingHosts: NetworkAllowlistPolicy.missingProtectedHosts(
+                                from: NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+                            ),
+                            warningText: { joined in
+                                "Allow-list is missing \(joined). The agent will not be able to reach Anthropic — Claude Code will stop working. Add `*.anthropic.com` or the specific hosts."
+                            }
+                        )
+                    } else {
+                        Text("Agent container can reach any HTTP/HTTPS host. Non-HTTP traffic is already blocked by the isolated Docker network.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -167,13 +177,24 @@ struct GlobalSettingsSheet: View {
         .alert("Disable Anthropic passthrough?", isPresented: $showRemoveAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Remove anyway", role: .destructive) {
-                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+                proceedAfterPassthroughConfirmed()
             }
         } message: {
             let missing = PassthroughPolicy.missingProtectedHosts(
                 from: PassthroughPolicy.splitHostLines(passthroughText)
             )
             Text("\(missing.joined(separator: ", ")) will be removed from passthrough. Airlock will then decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
+        }
+        .alert("Allow-list blocks Anthropic?", isPresented: $showAllowlistAnthropicConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Save anyway", role: .destructive) {
+                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+            }
+        } message: {
+            let missing = NetworkAllowlistPolicy.missingProtectedHosts(
+                from: NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+            )
+            Text("The network allow-list does not cover \(missing.joined(separator: ", ")). The agent will be unable to reach Anthropic and Claude Code will stop responding. Continue?")
         }
     }
 
@@ -199,16 +220,38 @@ struct GlobalSettingsSheet: View {
             restrictMCPServers = false
             enabledMCPSelection = []
         }
+        if let allowlist = settings.networkAllowlist, !allowlist.isEmpty {
+            restrictNetworkAllowlist = true
+            networkAllowlistText = allowlist.joined(separator: "\n")
+        } else {
+            restrictNetworkAllowlist = false
+            networkAllowlistText = ""
+        }
     }
 
     private func save() {
+        // Guardrails chain: passthrough → allow-list → commit. Each alert's
+        // "confirm anyway" button re-enters this chain via the next helper
+        // so users see BOTH warnings if they're both violated, instead of
+        // silently losing the second alert after confirming the first.
         let parsed = PassthroughPolicy.splitHostLines(passthroughText)
         let missing = PassthroughPolicy.missingProtectedHosts(from: parsed)
         if !missing.isEmpty {
             showRemoveAnthropicConfirm = true
             return
         }
-        commitSave(hosts: parsed)
+        proceedAfterPassthroughConfirmed()
+    }
+
+    private func proceedAfterPassthroughConfirmed() {
+        if restrictNetworkAllowlist {
+            let allowlist = NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+            if !NetworkAllowlistPolicy.missingProtectedHosts(from: allowlist).isEmpty {
+                showAllowlistAnthropicConfirm = true
+                return
+            }
+        }
+        commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
     }
 
     private func commitSave(hosts: [String]) {
@@ -216,6 +259,11 @@ struct GlobalSettingsSheet: View {
         settings.enabledMCPServers = restrictMCPServers
             ? enabledMCPSelection.sorted()
             : nil
+        if restrictNetworkAllowlist {
+            settings.networkAllowlist = NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+        } else {
+            settings.networkAllowlist = nil
+        }
 
         let store = WorkspaceStore()
         do {

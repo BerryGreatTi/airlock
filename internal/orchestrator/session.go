@@ -92,6 +92,7 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
+		NetworkAllowlist: cfg.NetworkAllowlist,
 		EnvSecrets:       params.EnvSecrets,
 	}
 	if err := opts.Validate(); err != nil {
@@ -171,6 +172,7 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
+		NetworkAllowlist: cfg.NetworkAllowlist,
 		EnvSecrets:       params.EnvSecrets,
 	}
 	if err := opts.Validate(); err != nil {

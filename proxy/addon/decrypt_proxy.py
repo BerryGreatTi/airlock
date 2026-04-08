@@ -15,6 +15,12 @@ MAPPING_PATH = os.environ.get("AIRLOCK_MAPPING_PATH", "/run/airlock/mapping.json
 PASSTHROUGH_HOSTS_RAW = os.environ.get(
     "AIRLOCK_PASSTHROUGH_HOSTS", "api.anthropic.com,auth.anthropic.com"
 )
+ALLOWED_HOSTS_RAW = os.environ.get("AIRLOCK_ALLOWED_HOSTS", "")
+
+
+def _split_csv_env(raw: str) -> list[str]:
+    """Parse a comma-separated env var into a trimmed, non-empty list."""
+    return [h.strip() for h in raw.split(",") if h.strip()]
 
 
 class DecryptAddon:
@@ -22,20 +28,36 @@ class DecryptAddon:
         self,
         mapping_path: str = MAPPING_PATH,
         passthrough_hosts: list[str] | None = None,
+        allowed_hosts: list[str] | None = None,
     ):
         self.mapping: dict[str, str] = {}
         self.passthrough: set[str] = set()
+        # Allow-list is split into two sets: exact host matches and suffix
+        # patterns (stored as ".example.com" with the leading dot so
+        # `endswith` naturally rejects bare `example.com` — its length is
+        # one shorter than the suffix). Empty = allow all HTTP traffic
+        # (back-compat default). All entries are lowercased on insert and
+        # the host is lowercased on lookup: RFC 1035 §2.3.3 says hostnames
+        # are case-insensitive, and the Swift GUI's `NetworkAllowlistPolicy`
+        # normalizes the same way, so GUI guardrails and runtime
+        # enforcement agree on case semantics.
+        self._allow_exact: set[str] = set()
+        self._allow_suffix: set[str] = set()
         self._mapping_path: str = mapping_path
         self._last_mtime: float = 0.0
 
-        if passthrough_hosts is not None:
-            self.passthrough = set(passthrough_hosts)
-        else:
-            self.passthrough = {
-                h.strip()
-                for h in PASSTHROUGH_HOSTS_RAW.split(",")
-                if h.strip()
-            }
+        if passthrough_hosts is None:
+            passthrough_hosts = _split_csv_env(PASSTHROUGH_HOSTS_RAW)
+        self.passthrough = {h.lower() for h in passthrough_hosts}
+
+        if allowed_hosts is None:
+            allowed_hosts = _split_csv_env(ALLOWED_HOSTS_RAW)
+        for host in allowed_hosts:
+            host = host.lower()
+            if host.startswith("*."):
+                self._allow_suffix.add(host[1:])
+            else:
+                self._allow_exact.add(host)
 
         self._load_mapping(mapping_path)
 
@@ -59,7 +81,26 @@ class DecryptAddon:
             pass
 
     def is_passthrough(self, host: str) -> bool:
-        return host in self.passthrough
+        return host.lower() in self.passthrough
+
+    def is_allowed(self, host: str) -> bool:
+        """Return True if host passes the allow-list filter.
+
+        An empty allow-list means "no restriction" (back-compat). Otherwise:
+        - exact host match wins, or
+        - any suffix pattern `*.example.com` matches hosts ending in
+          `.example.com` (the stored form has a leading dot so bare
+          `example.com` is naturally excluded — cookie-scope rule).
+        """
+        if not self._allow_exact and not self._allow_suffix:
+            return True
+        host = host.lower()
+        if host in self._allow_exact:
+            return True
+        for suffix in self._allow_suffix:
+            if host.endswith(suffix):
+                return True
+        return False
 
     def replace_secrets(self, text: str) -> str:
         if not ENC_PATTERN.search(text):
@@ -84,6 +125,21 @@ class DecryptAddon:
 
     def request(self, flow: http.HTTPFlow) -> None:
         host = flow.request.pretty_host
+
+        # Allow-list enforcement runs BEFORE passthrough classification.
+        # Otherwise users could accidentally exempt blocked hosts by adding
+        # them to passthrough, which is the opposite of the intent.
+        if not self.is_allowed(host):
+            flow.response = http.Response.make(
+                403,
+                (
+                    b'{"error":"blocked_by_airlock",'
+                    b'"detail":"host is not in the workspace network allow-list"}'
+                ),
+                {"content-type": "application/json"},
+            )
+            self._emit_log(host, "blocked")
+            return
 
         if self.is_passthrough(host):
             self._emit_log(host, "passthrough")

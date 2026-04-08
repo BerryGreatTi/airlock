@@ -473,6 +473,51 @@ func TestBuildClaudeConfigLocaleEnv(t *testing.T) {
 	}
 }
 
+func TestBuildProxyConfigNetworkAllowlistEnv(t *testing.T) {
+	opts := container.RunOpts{
+		ProxyImage:       "airlock-proxy:latest",
+		NetworkName:      "airlock-net",
+		MappingPath:      "/tmp/mapping.json",
+		ProxyPort:        8080,
+		PassthroughHosts: []string{"api.anthropic.com"},
+		NetworkAllowlist: []string{"api.github.com", "*.stripe.com"},
+	}
+	cfg := container.BuildProxyConfig(opts)
+
+	hasAllowlist := false
+	for _, env := range cfg.Env {
+		if env == "AIRLOCK_ALLOWED_HOSTS=api.github.com,*.stripe.com" {
+			hasAllowlist = true
+		}
+	}
+	if !hasAllowlist {
+		t.Errorf("expected AIRLOCK_ALLOWED_HOSTS env var, got: %v", cfg.Env)
+	}
+}
+
+func TestBuildProxyConfigEmptyNetworkAllowlist(t *testing.T) {
+	// nil allow-list = allow all; env var should still be set (to empty)
+	// so the addon can parse it predictably.
+	opts := container.RunOpts{
+		ProxyImage:       "airlock-proxy:latest",
+		NetworkName:      "airlock-net",
+		MappingPath:      "/tmp/mapping.json",
+		ProxyPort:        8080,
+		PassthroughHosts: []string{},
+	}
+	cfg := container.BuildProxyConfig(opts)
+
+	hasAllowlist := false
+	for _, env := range cfg.Env {
+		if env == "AIRLOCK_ALLOWED_HOSTS=" {
+			hasAllowlist = true
+		}
+	}
+	if !hasAllowlist {
+		t.Errorf("expected empty AIRLOCK_ALLOWED_HOSTS env var, got: %v", cfg.Env)
+	}
+}
+
 func TestBuildProxyConfigMappingEnv(t *testing.T) {
 	opts := container.RunOpts{
 		ProxyImage:       "airlock-proxy:latest",

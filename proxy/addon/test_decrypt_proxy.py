@@ -416,3 +416,175 @@ def test_response_does_not_log_body_content(capsys):
     addon.response(flow)
     captured = capsys.readouterr()
     assert "supersecret123" not in captured.out
+
+
+# --- Network allow-list tests ---
+
+
+def _make_addon_with_allowlist(allowed: list[str] | None, passthrough: list[str] | None = None):
+    """Helper to build an addon with an explicit allow-list."""
+    from decrypt_proxy import DecryptAddon
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    json.dump({}, f)
+    f.flush()
+    f.close()
+    addon = DecryptAddon(
+        f.name,
+        passthrough_hosts=passthrough,
+        allowed_hosts=allowed,
+    )
+    os.unlink(f.name)
+    return addon
+
+
+def test_empty_allowlist_allows_all_hosts():
+    """Empty allowlist ([] or None) is back-compat: never blocks."""
+    addon = _make_addon_with_allowlist(allowed=[])
+    flow = _make_flow(host="random.example.com", headers={"X": "plain"})
+    addon.request(flow)
+    assert not _flow_was_blocked(flow)
+
+
+def test_none_allowlist_allows_all_hosts():
+    addon = _make_addon_with_allowlist(allowed=None)
+    flow = _make_flow(host="random.example.com", headers={"X": "plain"})
+    addon.request(flow)
+    assert not _flow_was_blocked(flow)
+
+
+def test_populated_allowlist_allows_exact_match():
+    addon = _make_addon_with_allowlist(allowed=["api.github.com"])
+    flow = _make_flow(host="api.github.com", headers={"X": "plain"})
+    addon.request(flow)
+    assert not _flow_was_blocked(flow)
+
+
+def test_populated_allowlist_blocks_non_matching_host_with_403():
+    addon = _make_addon_with_allowlist(allowed=["api.github.com"])
+    flow = _make_flow(host="api.evil.example.com", headers={"X": "plain"})
+    addon.request(flow)
+    assert _flow_was_blocked(flow)
+    assert flow.response.status_code == 403
+
+
+def test_allowlist_suffix_wildcard_matches_subdomain():
+    addon = _make_addon_with_allowlist(allowed=["*.stripe.com"])
+    for host in ("api.stripe.com", "checkout.stripe.com", "deeply.nested.stripe.com"):
+        flow = _make_flow(host=host)
+        addon.request(flow)
+        assert not _flow_was_blocked(flow), f"{host} should have been allowed"
+
+
+def test_allowlist_suffix_wildcard_does_not_match_bare_domain():
+    """`*.stripe.com` must NOT match `stripe.com` itself (cookie-scope semantics)."""
+    addon = _make_addon_with_allowlist(allowed=["*.stripe.com"])
+    flow = _make_flow(host="stripe.com")
+    addon.request(flow)
+    assert _flow_was_blocked(flow)
+    assert flow.response.status_code == 403
+
+
+def test_allowlist_suffix_wildcard_does_not_match_unrelated_suffix():
+    """`*.stripe.com` must NOT match `notstripe.com` or similar."""
+    addon = _make_addon_with_allowlist(allowed=["*.stripe.com"])
+    for host in ("notstripe.com", "api.notstripe.com", "stripe.com.evil.example"):
+        flow = _make_flow(host=host)
+        addon.request(flow)
+        assert _flow_was_blocked(flow), f"{host} should have been blocked"
+
+
+def test_allowlist_runs_before_passthrough():
+    """
+    Allow-list enforcement must run BEFORE passthrough classification.
+    A passthrough host that is NOT on the allow-list must still be blocked —
+    otherwise users could accidentally exempt blocked hosts by adding them to
+    passthrough.
+    """
+    addon = _make_addon_with_allowlist(
+        allowed=["api.github.com"],
+        passthrough=["api.anthropic.com"],
+    )
+    flow = _make_flow(host="api.anthropic.com", headers={"X": "plain"})
+    addon.request(flow)
+    assert _flow_was_blocked(flow), "passthrough host must still be blocked by allowlist"
+    assert flow.response.status_code == 403
+
+
+def test_allowlist_passthrough_and_allowlist_agree():
+    """If the allow-list includes a passthrough host, passthrough wins (no decryption)."""
+    mapping = {"ENC[age:tok]": "plaintext"}
+    addon = _make_addon(mapping, passthrough=["api.anthropic.com"])
+    # Re-init addon with an allow-list that also includes the passthrough host
+    from decrypt_proxy import DecryptAddon
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    json.dump(mapping, f)
+    f.flush()
+    f.close()
+    addon = DecryptAddon(
+        f.name,
+        passthrough_hosts=["api.anthropic.com"],
+        allowed_hosts=["api.anthropic.com"],
+    )
+    os.unlink(f.name)
+    flow = _make_flow(host="api.anthropic.com", headers={"Authorization": "Bearer ENC[age:tok]"})
+    addon.request(flow)
+    assert not _flow_was_blocked(flow)
+    # Passthrough preserved: ENC token still present (not decrypted)
+    assert flow.request.headers["Authorization"] == "Bearer ENC[age:tok]"
+
+
+def test_allowlist_emits_blocked_log(capsys):
+    addon = _make_addon_with_allowlist(allowed=["api.github.com"])
+    flow = _make_flow(host="api.evil.example.com")
+    addon.request(flow)
+    captured = capsys.readouterr()
+    log = json.loads(captured.out.strip())
+    assert log["action"] == "blocked"
+    assert log["host"] == "api.evil.example.com"
+
+
+def test_allowlist_env_var_parsing(monkeypatch):
+    """AIRLOCK_ALLOWED_HOSTS env var should seed the allow-list like passthrough does."""
+    from importlib import reload
+    monkeypatch.setenv("AIRLOCK_ALLOWED_HOSTS", "api.github.com, *.stripe.com ,")
+    import decrypt_proxy
+    reload(decrypt_proxy)
+    try:
+        assert decrypt_proxy.ALLOWED_HOSTS_RAW == "api.github.com, *.stripe.com ,"
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        json.dump({}, f)
+        f.flush()
+        f.close()
+        try:
+            addon = decrypt_proxy.DecryptAddon(f.name, passthrough_hosts=[])
+            assert addon.is_allowed("api.github.com")
+            assert addon.is_allowed("checkout.stripe.com")
+            assert not addon.is_allowed("api.evil.example.com")
+        finally:
+            os.unlink(f.name)
+    finally:
+        # Restore module state so other tests don't inherit the env-var's
+        # allow-list. `monkeypatch` will drop the env var on fixture teardown
+        # but the module-level constant was already captured, so we reload
+        # once more with a clean environment.
+        monkeypatch.delenv("AIRLOCK_ALLOWED_HOSTS", raising=False)
+        reload(decrypt_proxy)
+
+
+def test_allowlist_case_insensitive():
+    """Hostnames are case-insensitive per RFC 1035 §2.3.3. Mirrors the Swift
+    `NetworkAllowlistPolicy.testCaseInsensitive` guardrail test so the GUI
+    preview and runtime enforcement agree."""
+    addon = _make_addon_with_allowlist(allowed=["API.GitHub.com", "*.Stripe.com"])
+    assert addon.is_allowed("api.github.com")
+    assert addon.is_allowed("API.GITHUB.COM")
+    assert addon.is_allowed("checkout.stripe.com")
+    assert addon.is_allowed("CHECKOUT.STRIPE.COM")
+    assert not addon.is_allowed("api.evil.example.com")
+
+
+def _flow_was_blocked(flow) -> bool:
+    """Return True if the addon synthesized a response on the flow."""
+    return getattr(flow, "response", None) is not None and getattr(
+        getattr(flow, "response", None), "status_code", None
+    ) == 403
