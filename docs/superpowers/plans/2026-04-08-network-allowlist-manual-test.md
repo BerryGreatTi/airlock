@@ -10,7 +10,7 @@
 
 | Date | Operator | Scenarios | Outcome |
 |---|---|---|---|
-| 2026-04-08 | Claude Code | 1, 2, 3, 4, 5 | All 5 CLI scenarios **PASS**. Scenarios 6, 7 pending (GUI, manual). |
+| 2026-04-08 | Claude Code (CLI) + Berry (GUI) | 1, 2, 3, 4, 5, 6, 7a, 7b | **All 8 scenarios PASS.** Merge-blocking security invariants (2, 3, 5, 7a, 7b) verified end-to-end. |
 
 Details of the 2026-04-08 run:
 
@@ -19,12 +19,16 @@ Details of the 2026-04-08 run:
 - **Scenario 3** (cookie-scope wildcard): `api.stripe.com` → 401 (Stripe auth denied, upstream reached = allow-list passed), bare `stripe.com` → 403 `blocked_by_airlock`, `example.com` → 403.
 - **Scenario 4** (case-insensitive): mixed-case `API.GitHub.COM` in the allow-list matched a lowercase `api.github.com` request; uppercase `HTTPBIN.ORG` request was still blocked with 403.
 - **Scenario 5** (ordering invariant — CRITICAL): allow-list=`api.github.com`, passthrough=`api.anthropic.com,auth.anthropic.com`. Request to `api.anthropic.com` was **blocked** with 403 `blocked_by_airlock` (proving allow-list runs before passthrough); request to `api.github.com` → 200. Proxy log showed `"action": "blocked"` on `api.anthropic.com`, NO `"action": "passthrough"`.
+- **Scenario 6** (GUI global Settings + Anthropic guardrail): Toggle ON, inline warning fired live when typing `api.github.com`; Save triggered `Allow-list blocks Anthropic?` confirmation alert; replacing with `*.anthropic.com` + `api.github.com` cleared the warning (wildcard coverage recognition); Save with covered list had no alert and persisted to `settings.json` with both entries in order; toggle OFF + Save removed the key entirely (not set to `null`).
+- **Scenario 7a** (guardrail chaining — CRITICAL H1 fix check): typed non-Anthropic passthrough override + non-Anthropic allow-list override; Save fired the `Disable Anthropic passthrough for this workspace?` alert first; clicking `Remove anyway` **immediately** surfaced the second `Allow-list blocks Anthropic in this workspace?` alert — the chained guardrail fires in order, the H1 fix from the simplify pass holds.
+- **Scenario 7b** (Claude Code end-to-end under restrictive allow-list): workspace activated with `*.anthropic.com` + `api.github.com`, Claude Code booted normally, responded to "What is 2 plus 2?", and its Bash tool returned the airlock-synthesized `blocked_by_airlock` + `HTTP=403` for `httpbin.org`. End-to-end runtime enforcement confirmed through the full agent path.
 
-Two runbook corrections from this run (already applied below):
+Runbook corrections applied during the run:
 
 1. `airlock` Go binary uses the raw Docker SDK and defaults to `/var/run/docker.sock`. On Rancher/Colima desktops the prerequisite section now documents the `DOCKER_HOST` export.
 2. `curl` inside the agent container does not yet trust the mitmproxy-generated CA at the host level (pre-existing, unrelated to this PR). All test `curl`s now use `-k`. The allow-list check runs at the HTTP request layer AFTER the TLS handshake, so `-k` does not bypass it — a blocked host still gets the synthesized 403 regardless of trust chain.
 3. The proxy addon emits JSON log lines via `json.dumps` default separators (`", "` and `": "` with spaces). Grep patterns updated to tolerate the spaces.
+4. Shell quoting: `~/Library/"Application Support"/...` failed in the interactive shell with a spurious "No such file or directory" even though the file existed. All settings.json paths switched to `"$HOME/Library/Application Support/Airlock/..."` with double quotes, which expands reliably.
 
 ## Prerequisites
 
@@ -565,8 +569,10 @@ Record outcomes:
 | 3 | `*.stripe.com` rejects bare `stripe.com` | ✅ pass (2026-04-08) |
 | 4 | Case-insensitive matching | ✅ pass (2026-04-08) |
 | 5 | Allow-list wins over passthrough (ordering invariant) | ✅ pass (2026-04-08) |
-| 6 | GUI global allow-list + Anthropic guardrail | ☐ pass / ☐ fail (GUI, pending) |
-| 7a | Workspace override guardrail chaining | ☐ pass / ☐ fail (GUI, pending) |
-| 7b | Claude Code end-to-end under restrictive allow-list | ☐ pass / ☐ fail (GUI, pending) |
+| 6 | GUI global allow-list + Anthropic guardrail | ✅ pass (2026-04-08) |
+| 7a | Workspace override guardrail chaining | ✅ pass (2026-04-08) |
+| 7b | Claude Code end-to-end under restrictive allow-list | ✅ pass (2026-04-08) |
+
+**All 8 scenarios PASS. PR #24 is cleared for merge.**
 
 **Scenarios 2, 3, and 5 MUST pass before merging.** A failure in scenario 5 is a CRITICAL security regression — do not merge under any circumstances. A failure in scenario 7a means the guardrail-chaining fix has regressed and users can silently commit broken configurations.
