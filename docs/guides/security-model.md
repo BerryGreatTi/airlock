@@ -88,6 +88,22 @@ The GUI exposes this in two places:
 
 The CLI exposes the same control via `airlock run --enabled-mcps slack,github` and `airlock start --enabled-mcps slack,github`. An empty value with the flag (`--enabled-mcps ""`) explicitly disables all MCPs; omitting the flag preserves the existing behavior.
 
+### Layer 5: Network Allow-List
+
+A per-workspace network allow-list restricts outbound HTTP/HTTPS traffic from the agent container to a user-defined set of hosts. Enforcement happens in the mitmproxy addon (`proxy/addon/decrypt_proxy.py`): on each request the addon calls `is_allowed(host)` and, if the host is not on the list, synthesizes a `403 Forbidden` response with a JSON error body. The request never reaches the upstream server.
+
+Two patterns are supported: exact host (`api.stripe.com`) and suffix wildcard (`*.stripe.com`, which matches `api.stripe.com` and `deeply.nested.stripe.com` but NOT the bare `stripe.com`). No regex, no CIDR, no port filtering — this is a hostname allow-list, not a general firewall. Non-HTTP traffic is already blocked by the Docker `--internal` network; the allow-list only constrains what the agent can reach *through the proxy*.
+
+**Critical ordering invariant:** the allow-list check runs BEFORE the passthrough classification in `decrypt_proxy.request()`. Otherwise a user could accidentally exempt a blocked host by adding it to passthrough, inverting the intent. The ordering is covered by `test_allowlist_runs_before_passthrough`.
+
+**Two-state semantic:** empty/nil = allow all HTTP (back-compat default), populated = restrict. Unlike `EnabledMCPServers`, there's no "block all HTTP" state — disabling all HTTP traffic would immediately break the agent, so `omitempty` on `Config.NetworkAllowlist` is safe and the empty → nil round-trip collapse is explicitly tested (`TestNetworkAllowlistEmptyCollapsesToNil`).
+
+**Case-insensitivity:** RFC 1035 says hostnames are case-insensitive. Both the Python addon and the Swift GUI guardrail normalize hosts and allow-list entries to lowercase before comparison, so the GUI preview ("this allow-list covers Anthropic") and runtime enforcement agree on semantics.
+
+**Anthropic guardrail:** if the resolved allow-list is non-empty and does not cover `api.anthropic.com` and `auth.anthropic.com`, the GUI shows an inline yellow warning and a destructive-styled confirmation alert on Save (same UX as the passthrough guardrail). The guardrail check uses the same `isAllowed` logic as the Python addon (`NetworkAllowlistPolicy.swift`), so a user typing `*.anthropic.com` is correctly recognized as covering both protected hosts. The passthrough and allow-list guardrails chain: confirming the first does not silently bypass the second.
+
+The GUI exposes the control in `Global Settings → Network Allow-list` and `Workspace Settings → Network Allow-list Override`. The CLI exposes it via `airlock run --network-allowlist api.github.com,*.stripe.com` and `airlock start --network-allowlist ...`. See [ADR-0011](../decisions/ADR-0011-network-allowlist.md).
+
 ## What This Protects
 
 | Threat | Protected? | How |
@@ -95,7 +111,7 @@ The CLI exposes the same control via `airlock run --enabled-mcps slack,github` a
 | Secret in LLM prompt | Yes | Agent only has ciphertext |
 | Secret in generated code | Yes | Code contains `ENC[age:...]`, not real keys |
 | Secret pushed to public repo | Yes | Encrypted values are safe to publish |
-| Unauthorized API calls | Partially | Proxy routes all traffic, could add allowlists |
+| Unauthorized HTTP/HTTPS calls | Yes (opt-in) | Per-workspace network allow-list blocks non-listed hosts with 403 at the proxy (Layer 5) |
 | Untrusted MCP servers | Partially | Per-workspace allow-list filters mcpServers map at scan time (Layer 4) |
 | Container breakout | Partially | cap-drop=ALL, but kernel exploits possible |
 | Host compromise | No | Private key is on the host |
@@ -116,4 +132,4 @@ The CLI exposes the same control via `airlock run --enabled-mcps slack,github` a
 3. Mount workspace on a tmpfs volume for ephemeral sessions
 4. Rotate age keys periodically
 5. Monitor proxy logs for unexpected outbound destinations
-6. Consider adding a host allowlist to the proxy configuration
+6. Enable the Layer 5 network allow-list per workspace (see above)

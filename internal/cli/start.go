@@ -29,16 +29,18 @@ type StartResult struct {
 // significant — e.g., an empty PassthroughHosts string with the override flag
 // clears the config list, while no flag at all preserves it.
 type StartOptions struct {
-	ID                  string
-	Workspace           string
-	EnvFile             string
-	PassthroughHosts    string
-	PassthroughOverride bool
-	ProxyPort           int
-	ContainerImage      string
-	ProxyImage          string
-	EnabledMCPServers   string
-	MCPOverride         bool
+	ID                       string
+	Workspace                string
+	EnvFile                  string
+	PassthroughHosts         string
+	PassthroughOverride      bool
+	ProxyPort                int
+	ContainerImage           string
+	ProxyImage               string
+	EnabledMCPServers        string
+	MCPOverride              bool
+	NetworkAllowlist         string
+	NetworkAllowlistOverride bool
 }
 
 // RunStart encapsulates the start logic so it can be tested without cobra.
@@ -58,6 +60,9 @@ func RunStart(ctx context.Context, runtime container.ContainerRuntime, airlockDi
 	}
 	if opts.MCPOverride {
 		cfg.EnabledMCPServers = parseCSVList(opts.EnabledMCPServers)
+	}
+	if opts.NetworkAllowlistOverride {
+		cfg.NetworkAllowlist = parseCSVList(opts.NetworkAllowlist)
 	}
 
 	if opts.ProxyPort > 0 {
@@ -173,6 +178,7 @@ var (
 	startContainerImage    string
 	startProxyImage        string
 	startEnabledMCPServers string
+	startNetworkAllowlist  string
 )
 
 var startCmd = &cobra.Command{
@@ -192,16 +198,18 @@ Requires --id to identify this session.`,
 		defer docker.Close()
 
 		result, err := RunStart(ctx, docker, ".airlock", StartOptions{
-			ID:                  startID,
-			Workspace:           startWorkspace,
-			EnvFile:             startEnvFile,
-			PassthroughHosts:    startPassthroughHosts,
-			PassthroughOverride: cmd.Flags().Changed("passthrough-hosts"),
-			ProxyPort:           startProxyPort,
-			ContainerImage:      startContainerImage,
-			ProxyImage:          startProxyImage,
-			EnabledMCPServers:   startEnabledMCPServers,
-			MCPOverride:         cmd.Flags().Changed("enabled-mcps"),
+			ID:                       startID,
+			Workspace:                startWorkspace,
+			EnvFile:                  startEnvFile,
+			PassthroughHosts:         startPassthroughHosts,
+			PassthroughOverride:      cmd.Flags().Changed("passthrough-hosts"),
+			ProxyPort:                startProxyPort,
+			ContainerImage:           startContainerImage,
+			ProxyImage:               startProxyImage,
+			EnabledMCPServers:        startEnabledMCPServers,
+			MCPOverride:              cmd.Flags().Changed("enabled-mcps"),
+			NetworkAllowlist:         startNetworkAllowlist,
+			NetworkAllowlistOverride: cmd.Flags().Changed("network-allowlist"),
 		})
 		if err != nil {
 			return err
@@ -223,5 +231,6 @@ func init() {
 	startCmd.Flags().StringVar(&startContainerImage, "container-image", "", "container image (overrides config)")
 	startCmd.Flags().StringVar(&startProxyImage, "proxy-image", "", "proxy image (overrides config)")
 	startCmd.Flags().StringVar(&startEnabledMCPServers, "enabled-mcps", "", "comma-separated MCP server allow-list (overrides config). Empty value with this flag = disable all MCPs.")
+	startCmd.Flags().StringVar(&startNetworkAllowlist, "network-allowlist", "", "comma-separated host allow-list for outbound HTTP/HTTPS (supports *.example.com). Empty value with this flag = allow all (back-compat). Omitting the flag keeps the config value.")
 	rootCmd.AddCommand(startCmd)
 }

@@ -66,18 +66,21 @@ final class AppStateTests: XCTestCase {
         global.proxyImage = "default-proxy:v1"
         global.passthroughHosts = ["host1.com"]
         global.enabledMCPServers = ["slack", "github", "jira"]
+        global.networkAllowlist = ["api.github.com"]
         var ws = Workspace(name: "test", path: "/tmp")
         ws.containerImageOverride = "custom:v2"
         ws.proxyImageOverride = "custom-proxy:v2"
         ws.passthroughHostsOverride = ["host2.com"]
         ws.proxyPortOverride = 9090
         ws.enabledMCPServersOverride = ["slack"]
+        ws.networkAllowlistOverride = ["api.stripe.com"]
         let resolved = ResolvedSettings(global: global, workspace: ws)
         XCTAssertEqual(resolved.containerImage, "custom:v2")
         XCTAssertEqual(resolved.proxyImage, "custom-proxy:v2")
         XCTAssertEqual(resolved.passthroughHosts, ["host2.com"])
         XCTAssertEqual(resolved.proxyPort, 9090)
         XCTAssertEqual(resolved.enabledMCPServers, ["slack"])
+        XCTAssertEqual(resolved.networkAllowlist, ["api.stripe.com"])
     }
 
     func testResolvedSettingsFallsBackToGlobal() {
@@ -86,6 +89,7 @@ final class AppStateTests: XCTestCase {
         global.proxyImage = "global-proxy:latest"
         global.passthroughHosts = ["api.example.com"]
         global.enabledMCPServers = ["slack"]
+        global.networkAllowlist = ["api.github.com"]
         let ws = Workspace(name: "test", path: "/tmp")
         let resolved = ResolvedSettings(global: global, workspace: ws)
         XCTAssertEqual(resolved.containerImage, "global:latest")
@@ -93,6 +97,29 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(resolved.passthroughHosts, ["api.example.com"])
         XCTAssertEqual(resolved.proxyPort, 8080)
         XCTAssertEqual(resolved.enabledMCPServers, ["slack"])
+        XCTAssertEqual(resolved.networkAllowlist, ["api.github.com"])
+    }
+
+    func testResolvedSettingsNilNetworkAllowlistMeansAllowAll() {
+        // nil override + nil global = nil (allow all HTTP traffic)
+        let global = AppSettings()
+        let ws = Workspace(name: "test", path: "/tmp")
+        let resolved = ResolvedSettings(global: global, workspace: ws)
+        XCTAssertNil(resolved.networkAllowlist)
+    }
+
+    func testEmptyNetworkAllowlistOverrideResolvesToEmptyArray() {
+        // An explicit empty-array override wins over a populated global
+        // setting. At the enforcement layer (mitmproxy addon), empty means
+        // "allow all HTTP" — same as nil — but the override-vs-inherit
+        // distinction matters for UI display, so the resolver preserves
+        // whichever explicit value the workspace set.
+        var global = AppSettings()
+        global.networkAllowlist = ["api.github.com"]
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.networkAllowlistOverride = []
+        let resolved = ResolvedSettings(global: global, workspace: ws)
+        XCTAssertEqual(resolved.networkAllowlist, [])
     }
 
     func testResolvedSettingsNilMCPMeansAllEnabled() {

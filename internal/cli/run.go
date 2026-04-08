@@ -23,6 +23,7 @@ var (
 	runContainerImage    string
 	runProxyImage        string
 	runEnabledMCPServers string
+	runNetworkAllowlist  string
 )
 
 var runCmd = &cobra.Command{
@@ -47,6 +48,9 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 		}
 		if cmd.Flags().Changed("enabled-mcps") {
 			cfg.EnabledMCPServers = parseCSVList(runEnabledMCPServers)
+		}
+		if cmd.Flags().Changed("network-allowlist") {
+			cfg.NetworkAllowlist = parseCSVList(runNetworkAllowlist)
 		}
 
 		if cmd.Flags().Changed("proxy-port") && runProxyPort > 0 {
@@ -156,5 +160,6 @@ func init() {
 	runCmd.Flags().StringVar(&runContainerImage, "container-image", "", "container image (overrides config)")
 	runCmd.Flags().StringVar(&runProxyImage, "proxy-image", "", "proxy image (overrides config)")
 	runCmd.Flags().StringVar(&runEnabledMCPServers, "enabled-mcps", "", "comma-separated MCP server allow-list (overrides config). Empty value with this flag = disable all MCPs.")
+	runCmd.Flags().StringVar(&runNetworkAllowlist, "network-allowlist", "", "comma-separated host allow-list for outbound HTTP/HTTPS (supports *.example.com). Empty value with this flag = allow all (back-compat). Omitting the flag keeps the config value.")
 	rootCmd.AddCommand(runCmd)
 }

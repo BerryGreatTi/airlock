@@ -34,6 +34,11 @@ final class ContainerSessionService {
         if let mcpAllowlist = resolved.enabledMCPServers {
             args += ["--enabled-mcps", mcpAllowlist.joined(separator: ",")]
         }
+        // Same semantic for the network allow-list: absent flag = keep
+        // config.yaml value (and back-compat default of allow-all).
+        if let netAllowlist = resolved.networkAllowlist {
+            args += ["--network-allowlist", netAllowlist.joined(separator: ",")]
+        }
         let result = try await cli.run(args: args, workingDirectory: workspace.path)
         if result.exitCode != 0 {
             throw NSError(

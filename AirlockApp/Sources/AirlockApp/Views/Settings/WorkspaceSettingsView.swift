@@ -10,6 +10,9 @@ struct WorkspaceSettingsView: View {
     @State private var discoveredMCPServers: [String] = []
     @State private var overrideMCPServers = false
     @State private var workspaceMCPSelection: Set<String> = []
+    @State private var overrideNetworkAllowlist = false
+    @State private var networkAllowlistText = ""
+    @State private var showAllowlistAnthropicConfirm = false
 
     var body: some View {
         Form {
@@ -48,30 +51,14 @@ struct WorkspaceSettingsView: View {
                 let defaultHint = globalSettings.passthroughHosts.isEmpty
                     ? "No default passthrough hosts"
                     : "Default: \(globalSettings.passthroughHosts.joined(separator: ", "))"
-                Text("Passthrough hosts override (\(defaultHint))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                TextEditor(text: $passthroughText)
-                    .font(.system(size: 12, design: .monospaced))
-                    .frame(height: 80)
-
-                let parsedNonEmpty = PassthroughPolicy.splitHostLines(passthroughText)
-                if !parsedNonEmpty.isEmpty {
-                    let missing = PassthroughPolicy.missingProtectedHosts(from: parsedNonEmpty)
-                    if !missing.isEmpty {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.yellow)
-                            Text("This override would remove \(missing.joined(separator: ", ")) from passthrough. Airlock would decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers.")
-                                .font(.caption)
-                                .foregroundStyle(.yellow)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(8)
-                        .background(Color.yellow.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                HostListEditor(
+                    caption: "Passthrough hosts override (\(defaultHint))",
+                    text: $passthroughText,
+                    missingHosts: passthroughOverrideMissingHosts,
+                    warningText: { joined in
+                        "This override would remove \(joined) from passthrough. Airlock would decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers."
                     }
-                }
+                )
             }
 
             Section("MCP Servers Override") {
@@ -91,6 +78,33 @@ struct WorkspaceSettingsView: View {
                     } else if let global = globalSettings.enabledMCPServers {
                         workspaceMCPSelection = Set(global)
                     }
+                }
+            }
+
+            Section("Network Allow-list Override") {
+                Toggle("Override global allow-list", isOn: $overrideNetworkAllowlist)
+                    .onChange(of: overrideNetworkAllowlist) { _, newValue in
+                        if !newValue {
+                            networkAllowlistText = ""
+                        } else if let global = globalSettings.networkAllowlist, !global.isEmpty {
+                            networkAllowlistText = global.joined(separator: "\n")
+                        }
+                    }
+                if overrideNetworkAllowlist {
+                    HostListEditor(
+                        caption: "One host per line. Use `*.example.com` for subdomain wildcards. Only HTTP/HTTPS is filtered.",
+                        text: $networkAllowlistText,
+                        missingHosts: NetworkAllowlistPolicy.missingProtectedHosts(
+                            from: NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+                        ),
+                        warningText: { joined in
+                            "This workspace would block \(joined). Claude Code will not work here. Add `*.anthropic.com` or the specific hosts."
+                        }
+                    )
+                } else {
+                    Text(inheritedAllowlistDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -116,7 +130,7 @@ struct WorkspaceSettingsView: View {
         .alert("Disable Anthropic passthrough for this workspace?", isPresented: $showRemoveAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Remove anyway", role: .destructive) {
-                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+                proceedAfterPassthroughConfirmed()
             }
         } message: {
             let missing = PassthroughPolicy.missingProtectedHosts(
@@ -124,6 +138,29 @@ struct WorkspaceSettingsView: View {
             )
             Text("\(missing.joined(separator: ", ")) will not be in this workspace's passthrough list. Airlock will decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
         }
+        .alert("Allow-list blocks Anthropic in this workspace?", isPresented: $showAllowlistAnthropicConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Save anyway", role: .destructive) {
+                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+            }
+        } message: {
+            let missing = NetworkAllowlistPolicy.missingProtectedHosts(
+                from: NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+            )
+            Text("This workspace's allow-list does not cover \(missing.joined(separator: ", ")). The agent will be unable to reach Anthropic and Claude Code will stop responding. Continue?")
+        }
+    }
+
+    /// Protected hosts missing from the workspace passthrough override.
+    /// Returns an empty list when the editor is empty (empty = inherit
+    /// global, not an explicit removal), so the HostListEditor only
+    /// shows the warning for explicit non-empty overrides.
+    private var passthroughOverrideMissingHosts: [String] {
+        let parsed = PassthroughPolicy.splitHostLines(passthroughText)
+        if parsed.isEmpty {
+            return []
+        }
+        return PassthroughPolicy.missingProtectedHosts(from: parsed)
     }
 
     private var inheritedMCPDescription: String {
@@ -133,6 +170,13 @@ struct WorkspaceSettingsView: View {
                 : "Inheriting global setting: \(global.joined(separator: ", "))."
         }
         return "Inheriting global setting (all MCP servers enabled)."
+    }
+
+    private var inheritedAllowlistDescription: String {
+        if let global = globalSettings.networkAllowlist, !global.isEmpty {
+            return "Inheriting global allow-list: \(global.joined(separator: ", "))."
+        }
+        return "Inheriting global setting (all HTTP/HTTPS hosts allowed)."
     }
 
     private func load() {
@@ -146,9 +190,19 @@ struct WorkspaceSettingsView: View {
             overrideMCPServers = false
             workspaceMCPSelection = []
         }
+        if let override = workspace.networkAllowlistOverride, !override.isEmpty {
+            overrideNetworkAllowlist = true
+            networkAllowlistText = override.joined(separator: "\n")
+        } else {
+            overrideNetworkAllowlist = false
+            networkAllowlistText = ""
+        }
     }
 
     private func save() {
+        // Guardrails chain: passthrough → allow-list → commit. Each alert's
+        // "confirm anyway" button re-enters this chain via the next helper
+        // so users see BOTH warnings if they're both violated.
         let hosts = PassthroughPolicy.splitHostLines(passthroughText)
         // Empty override = inherit global; not flagged.
         if !hosts.isEmpty {
@@ -158,7 +212,18 @@ struct WorkspaceSettingsView: View {
                 return
             }
         }
-        commitSave(hosts: hosts)
+        proceedAfterPassthroughConfirmed()
+    }
+
+    private func proceedAfterPassthroughConfirmed() {
+        if overrideNetworkAllowlist {
+            let allowlist = NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+            if !NetworkAllowlistPolicy.missingProtectedHosts(from: allowlist).isEmpty {
+                showAllowlistAnthropicConfirm = true
+                return
+            }
+        }
+        commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
     }
 
     private func commitSave(hosts: [String]) {
@@ -167,6 +232,12 @@ struct WorkspaceSettingsView: View {
             appState.workspaces[idx].enabledMCPServersOverride = overrideMCPServers
                 ? workspaceMCPSelection.sorted()
                 : nil
+            if overrideNetworkAllowlist {
+                appState.workspaces[idx].networkAllowlistOverride =
+                    NetworkAllowlistPolicy.splitHostLines(networkAllowlistText)
+            } else {
+                appState.workspaces[idx].networkAllowlistOverride = nil
+            }
         }
         try? WorkspaceStore().saveWorkspaces(appState.workspaces)
     }

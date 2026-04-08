@@ -44,6 +44,7 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertNil(ws.passthroughHostsOverride)
         XCTAssertNil(ws.proxyPortOverride)
         XCTAssertNil(ws.enabledMCPServersOverride)
+        XCTAssertNil(ws.networkAllowlistOverride)
     }
 
     func testOverrideFieldsPersisted() throws {
@@ -52,12 +53,14 @@ final class WorkspaceTests: XCTestCase {
         ws.passthroughHostsOverride = ["api.example.com"]
         ws.proxyPortOverride = 9090
         ws.enabledMCPServersOverride = ["slack", "github"]
+        ws.networkAllowlistOverride = ["api.github.com", "*.stripe.com"]
         let data = try JSONEncoder().encode(ws)
         let decoded = try JSONDecoder().decode(Workspace.self, from: data)
         XCTAssertEqual(decoded.proxyImageOverride, "custom-proxy:v2")
         XCTAssertEqual(decoded.passthroughHostsOverride, ["api.example.com"])
         XCTAssertEqual(decoded.proxyPortOverride, 9090)
         XCTAssertEqual(decoded.enabledMCPServersOverride, ["slack", "github"])
+        XCTAssertEqual(decoded.networkAllowlistOverride, ["api.github.com", "*.stripe.com"])
     }
 
     func testEmptyMCPOverrideMeansNoneEnabled() throws {
@@ -83,6 +86,7 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertNil(decoded.passthroughHostsOverride)
         XCTAssertNil(decoded.proxyPortOverride)
         XCTAssertNil(decoded.enabledMCPServersOverride)
+        XCTAssertNil(decoded.networkAllowlistOverride)
     }
 
     func testTerminalSessionCreation() {

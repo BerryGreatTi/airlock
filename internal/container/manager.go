@@ -27,6 +27,9 @@ type RunOpts struct {
 	CACertPath       string
 	ProxyPort        int
 	PassthroughHosts []string
+	// NetworkAllowlist restricts outbound traffic to these hosts via the
+	// mitmproxy addon. Empty = allow all HTTP/HTTPS (back-compat).
+	NetworkAllowlist []string
 	EnvSecrets       []secrets.EnvVar
 }
 
@@ -67,6 +70,7 @@ func BuildProxyConfig(opts RunOpts) ContainerConfig {
 		name = "airlock-proxy-" + opts.ID
 	}
 	passthroughStr := strings.Join(opts.PassthroughHosts, ",")
+	allowlistStr := strings.Join(opts.NetworkAllowlist, ",")
 
 	var binds []string
 	if opts.MappingPath != "" {
@@ -81,6 +85,7 @@ func BuildProxyConfig(opts RunOpts) ContainerConfig {
 		Env: []string{
 			"AIRLOCK_MAPPING_PATH=/run/airlock/mapping.json",
 			fmt.Sprintf("AIRLOCK_PASSTHROUGH_HOSTS=%s", passthroughStr),
+			fmt.Sprintf("AIRLOCK_ALLOWED_HOSTS=%s", allowlistStr),
 		},
 		CapDrop: []string{"ALL"},
 	}
