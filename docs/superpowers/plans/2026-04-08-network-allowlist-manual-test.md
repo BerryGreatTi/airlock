@@ -332,8 +332,8 @@ Allow-list enforcement runs strictly before passthrough classification. The orde
     ```
 - [ ] **6.0.3** **Back up existing global settings** — the scenario writes to `settings.json` and you'll want to restore afterwards:
     ```bash
-    cp ~/Library/Application\ Support/Airlock/settings.json \
-       ~/Library/Application\ Support/Airlock/settings.json.bak 2>/dev/null || echo "no prior settings"
+    cp "$HOME/Library/Application Support/Airlock/settings.json" \
+       "$HOME/Library/Application Support/Airlock/settings.json.bak" 2>/dev/null || echo "no prior settings"
     ```
 
 ### 6.1 Launch the GUI
@@ -435,10 +435,11 @@ Bottom of the sheet: `Cancel` and `Save` buttons.
     - No yellow warning.
 - [ ] **6.9.4** Verify the on-disk file matches (host shell, outside the app):
     ```bash
-    cat ~/Library/Application\ Support/Airlock/settings.json \
+    cat "$HOME/Library/Application Support/Airlock/settings.json" \
       | python3 -m json.tool | grep -A4 networkAllowlist
     ```
     **Expected:** a `"networkAllowlist"` key with a two-element array (order matches the TextEditor text).
+    NOTE: use `"$HOME/..."` with double quotes, NOT `~/Library/"Application Support"/...`. The mixed quoting trips on some shells and you'll get a spurious "No such file or directory" error even though the file exists.
 
 ### 6.10 Toggle OFF + Save → field is cleared from settings.json
 
@@ -450,7 +451,7 @@ Bottom of the sheet: `Cancel` and `Save` buttons.
 - [ ] **6.10.3** Click `Save`. **Expected:** `Saved` flashes, sheet dismisses, no alert.
 - [ ] **6.10.4** Confirm the key is gone from `settings.json`:
     ```bash
-    cat ~/Library/Application\ Support/Airlock/settings.json \
+    cat "$HOME/Library/Application Support/Airlock/settings.json" \
       | python3 -m json.tool | grep networkAllowlist \
       && echo "FAIL: field still present" || echo "OK: field cleared"
     ```
@@ -461,8 +462,8 @@ Bottom of the sheet: `Cancel` and `Save` buttons.
 - [ ] **6.11.1** Quit the Airlock app (`⌘Q`).
 - [ ] **6.11.2** Restore your backup if you had prior global settings:
     ```bash
-    mv ~/Library/Application\ Support/Airlock/settings.json.bak \
-       ~/Library/Application\ Support/Airlock/settings.json 2>/dev/null || true
+    mv "$HOME/Library/Application Support/Airlock/settings.json.bak" \
+       "$HOME/Library/Application Support/Airlock/settings.json" 2>/dev/null || true
     ```
 
 ### Pass criteria (all must hold)
