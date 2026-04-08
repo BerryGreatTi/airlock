@@ -316,39 +316,165 @@ Allow-list enforcement runs strictly before passthrough classification. The orde
 
 ## Scenario 6 — GUI global Settings + Anthropic guardrail
 
-**Goal:** The GUI's global Network Allow-list editor shows the inline yellow warning when the allow-list does not cover `api.anthropic.com` / `auth.anthropic.com`, and the Save button triggers a destructive-styled confirmation alert. A wildcard `*.anthropic.com` clears the warning.
+**Goal:** The GUI's global Network Allow-list editor shows the inline yellow warning when the allow-list does not cover `api.anthropic.com` / `auth.anthropic.com`, fires a destructive-styled confirmation alert on Save, and correctly recognizes that a `*.anthropic.com` wildcard covers both protected hosts.
 
-**Setup:** GUI only. Launch `make gui-run` or double-click `build/Airlock.app`.
+### Pre-flight (host shell, before opening the GUI)
 
-### Steps
+- [ ] **6.0.1** Build the Go binary and rebuild the proxy image from `feat/network-allowlist`:
+    ```bash
+    cd /Users/berry.kim/Projects/airlock
+    make build
+    docker build -t airlock-proxy:latest -f proxy/Dockerfile proxy/
+    ```
+- [ ] **6.0.2** Export the Docker socket if you're on Rancher/Colima (skip for Docker Desktop with the standard path):
+    ```bash
+    export DOCKER_HOST=unix:///Users/$(whoami)/.rd/docker.sock
+    ```
+- [ ] **6.0.3** **Back up existing global settings** — the scenario writes to `settings.json` and you'll want to restore afterwards:
+    ```bash
+    cp ~/Library/Application\ Support/Airlock/settings.json \
+       ~/Library/Application\ Support/Airlock/settings.json.bak 2>/dev/null || echo "no prior settings"
+    ```
 
-- [ ] **6.1** Open global Settings (gear icon in the sidebar or menu `Airlock → Settings...`).
-- [ ] **6.2** Scroll to the "Network Allow-list" section. **Expected initial state:**
-    - Toggle `Restrict outbound hosts` is OFF.
-    - Caption reads: `Agent container can reach any HTTP/HTTPS host. Non-HTTP traffic is already blocked by the isolated Docker network.`
-    - No TextEditor visible.
-- [ ] **6.3** Flip the toggle ON. **Expected:**
-    - A monospaced TextEditor appears (empty).
-    - Caption reads: `Only the listed hosts can receive outbound HTTP/HTTPS traffic. Use *.example.com for subdomain wildcards. One entry per line.`
-    - NO yellow warning row yet (empty list is not actionable).
-- [ ] **6.4** Type `api.github.com` on the first line. **Expected:**
-    - An inline yellow warning appears below the editor saying the allow-list is missing `api.anthropic.com` and `auth.anthropic.com`.
-- [ ] **6.5** Click **Save**. **Expected:**
-    - A red/destructive confirmation alert titled `Allow-list blocks Anthropic?` with a Cancel button and a `Save anyway` button.
-    - Click **Cancel** — the sheet stays open, nothing is persisted.
-- [ ] **6.6** Delete the line and replace with `*.anthropic.com` on line one and `api.github.com` on line two. **Expected:**
-    - The yellow warning disappears (the wildcard covers both protected hosts).
-- [ ] **6.7** Click **Save**. **Expected:**
-    - No confirmation alert.
-    - The sheet closes, "Saved" briefly flashes.
-- [ ] **6.8** Reopen global Settings and confirm the editor shows `*.anthropic.com` and `api.github.com` persisted across reload.
-- [ ] **6.9** Flip the toggle OFF again and click **Save**. **Expected:**
-    - The sheet closes normally.
-    - Reopen: the caption is back to the "allow any host" text and the toggle is OFF. `~/Library/Application Support/Airlock/settings.json` no longer contains a `networkAllowlist` key (or it's `null`).
+### 6.1 Launch the GUI
 
-### Expected outcome
+- [ ] **6.1.1** Start the app. Two options:
+    - From source: `cd /Users/berry.kim/Projects/airlock && make gui-run`
+    - From bundle: double-click `build/Airlock.app` if `make gui-package` has been run
+- [ ] **6.1.2** Wait for the window to appear. **Expected:** left sidebar (workspaces — may be empty), main area on the right, `Airlock` in the menu bar. Scenario 6 does NOT require a workspace to be registered.
 
-The inline warning, Save-time alert, wildcard-coverage recognition, and toggle-off persistence all behave as designed.
+### 6.2 Open the Global Settings sheet
+
+Three equivalent entry points (pick any):
+
+- [ ] **6.2.a Keyboard shortcut (fastest):** `⌘,` (Cmd + comma)
+- [ ] **6.2.b Menu bar:** `Airlock → Preferences...`
+- [ ] **6.2.c Sidebar:** click the `⚙ Settings` gear button at the bottom of the sidebar
+
+**Expected after any of them:** a 500×700 modal sheet slides in containing a scrollable `Form` with sections in this order:
+
+1. Appearance (theme)
+2. Terminal (font + size)
+3. General (airlock binary path)
+4. Container Defaults
+5. Network Defaults (passthrough hosts)
+6. MCP Servers
+7. **Network Allow-list** ← scenario 6's target
+8. Claude Code State Volume
+
+Bottom of the sheet: `Cancel` and `Save` buttons.
+
+### 6.3 Verify the initial state of the Network Allow-list section
+
+- [ ] **6.3.1** Scroll down to the **Network Allow-list** section header.
+- [ ] **6.3.2** Verify:
+    - Toggle label: `Restrict outbound hosts`
+    - Toggle value: **OFF** (if ON from a prior run, toggle OFF and Save first, then reopen)
+    - Caption below the toggle: `Agent container can reach any HTTP/HTTPS host. Non-HTTP traffic is already blocked by the isolated Docker network.`
+    - No TextEditor visible
+    - No yellow warning row
+
+### 6.4 Toggle ON — verify empty-list state
+
+- [ ] **6.4.1** Click the `Restrict outbound hosts` toggle to flip it ON.
+- [ ] **6.4.2** **Expected:**
+    - A monospaced TextEditor appears, empty, ~80 pt tall
+    - Caption above the editor: `` Only the listed hosts can receive outbound HTTP/HTTPS traffic. Use `*.example.com` for subdomain wildcards. One entry per line. ``
+    - **No yellow warning row** (empty list = allow all, nothing to warn about)
+
+### 6.5 Type a non-Anthropic host → inline warning fires live
+
+- [ ] **6.5.1** Click into the TextEditor to focus it.
+- [ ] **6.5.2** Type `api.github.com`.
+- [ ] **6.5.3** **Expected immediately** (no Save click needed — the warning updates on every keystroke):
+    - A yellow warning row appears below the TextEditor with:
+        - A yellow ⚠ `exclamationmark.triangle.fill` icon
+        - Text: `` Allow-list is missing api.anthropic.com, auth.anthropic.com. The agent will not be able to reach Anthropic — Claude Code will stop working. Add `*.anthropic.com` or the specific hosts. ``
+    - Pale yellow background with rounded corners
+
+### 6.6 Click Save → confirmation alert fires
+
+- [ ] **6.6.1** Click the blue `Save` button at the bottom (or press `Return`).
+- [ ] **6.6.2** **Expected:** a modal alert appears on top of the sheet:
+    - Title: `Allow-list blocks Anthropic?`
+    - Body: `The network allow-list does not cover api.anthropic.com, auth.anthropic.com. The agent will be unable to reach Anthropic and Claude Code will stop responding. Continue?`
+    - Buttons: `Cancel` (default) and `Save anyway` (red/destructive)
+- [ ] **6.6.3** **Critical checks before clicking anything:**
+    - Title mentions **allow-list**, NOT passthrough. If it says `Disable Anthropic passthrough?`, the wrong guardrail fired — STOP and investigate.
+    - `Save anyway` is styled red (destructive), not blue.
+- [ ] **6.6.4** Click `Cancel`.
+- [ ] **6.6.5** **Expected:** the alert dismisses, the sheet stays open, nothing has been persisted (the TextEditor still contains `api.github.com`, the yellow warning is still visible).
+
+### 6.7 Replace with `*.anthropic.com` → warning clears
+
+- [ ] **6.7.1** Click into the TextEditor, select all (`⌘A`), delete.
+- [ ] **6.7.2** Type two lines (use `Return` between them):
+    ```
+    *.anthropic.com
+    api.github.com
+    ```
+- [ ] **6.7.3** **Expected:**
+    - The yellow warning **disappears**. This is the critical wildcard-coverage check — `NetworkAllowlistPolicy.missingProtectedHosts` must recognize that `*.anthropic.com` covers both `api.anthropic.com` and `auth.anthropic.com`.
+    - If the warning does NOT disappear, wildcard recognition is broken — STOP and investigate.
+
+### 6.8 Save with covered list → no alert, sheet dismisses
+
+- [ ] **6.8.1** Click `Save` (or press `Return`).
+- [ ] **6.8.2** **Expected:**
+    - **No confirmation alert.** (The allow-list covers Anthropic, guardrail is satisfied.)
+    - The word `Saved` briefly flashes in green to the left of the buttons.
+    - After ~1 second the sheet dismisses itself automatically.
+
+### 6.9 Verify persistence on reopen
+
+- [ ] **6.9.1** Reopen the Global Settings sheet (`⌘,`).
+- [ ] **6.9.2** Scroll to the Network Allow-list section.
+- [ ] **6.9.3** **Expected:**
+    - Toggle is **ON**.
+    - TextEditor contains two lines: `*.anthropic.com` and `api.github.com`.
+    - No yellow warning.
+- [ ] **6.9.4** Verify the on-disk file matches (host shell, outside the app):
+    ```bash
+    cat ~/Library/Application\ Support/Airlock/settings.json \
+      | python3 -m json.tool | grep -A4 networkAllowlist
+    ```
+    **Expected:** a `"networkAllowlist"` key with a two-element array (order matches the TextEditor text).
+
+### 6.10 Toggle OFF + Save → field is cleared from settings.json
+
+- [ ] **6.10.1** While the sheet is still open, flip the toggle to OFF.
+- [ ] **6.10.2** **Expected:**
+    - The TextEditor disappears.
+    - Caption reverts to `Agent container can reach any HTTP/HTTPS host...`
+    - No warning.
+- [ ] **6.10.3** Click `Save`. **Expected:** `Saved` flashes, sheet dismisses, no alert.
+- [ ] **6.10.4** Confirm the key is gone from `settings.json`:
+    ```bash
+    cat ~/Library/Application\ Support/Airlock/settings.json \
+      | python3 -m json.tool | grep networkAllowlist \
+      && echo "FAIL: field still present" || echo "OK: field cleared"
+    ```
+    **Expected:** `OK: field cleared`. The commit flow sets `settings.networkAllowlist = nil` when the toggle is off, and the JSON encoder omits nil optional fields, so the key should be absent entirely (not `null`).
+
+### 6.11 Post-scenario cleanup
+
+- [ ] **6.11.1** Quit the Airlock app (`⌘Q`).
+- [ ] **6.11.2** Restore your backup if you had prior global settings:
+    ```bash
+    mv ~/Library/Application\ Support/Airlock/settings.json.bak \
+       ~/Library/Application\ Support/Airlock/settings.json 2>/dev/null || true
+    ```
+
+### Pass criteria (all must hold)
+
+- 6.3 — initial OFF state, no editor, correct caption
+- 6.4 — toggle ON shows editor with caption, no warning while empty
+- 6.5 — typing a non-Anthropic host fires the yellow inline warning with the exact wording
+- 6.6 — Save fires a confirmation alert titled `Allow-list blocks Anthropic?` with a red `Save anyway` button; Cancel returns unchanged
+- 6.7 — `*.anthropic.com` clears the warning (wildcard coverage)
+- 6.8 — Save with covered list shows no alert, flashes "Saved", dismisses the sheet
+- 6.9 — reopening shows the persisted list and `settings.json` contains the key
+- 6.10 — toggle OFF + Save removes the key from `settings.json` entirely
 
 ---
 
