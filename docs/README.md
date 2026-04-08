@@ -37,6 +37,7 @@ Airlock is a security isolation layer for AI coding agents. It runs agents insid
 | [ADR-0007](decisions/ADR-0007-gui-theme-terminal-settings.md) | GUI theme switching, terminal settings, and Diff removal | Accepted |
 | [ADR-0008](decisions/ADR-0008-multi-format-secrets.md) | Multi-format secret file management | Accepted |
 | [ADR-0009](decisions/ADR-0009-macos-app-bundling.md) | macOS app bundling with embedded Go CLI | Accepted |
+| [ADR-0010](decisions/ADR-0010-environment-variable-secrets.md) | Environment-variable secrets and passthrough guardrail | Accepted |
 
 ## Guides Index
 

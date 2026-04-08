@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/taeikkim92/airlock/internal/config"
@@ -187,4 +188,109 @@ func splitLines(s string) []string {
 		lines = append(lines, s[start:])
 	}
 	return lines
+}
+
+func TestEnvSecretsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.EnvSecrets = []config.EnvSecretConfig{
+		{Name: "GITHUB_TOKEN", Value: "ENC[age:AQIBAAABc29tZQ==]"},
+		{Name: "SLACK_BOT_TOKEN", Value: "ENC[age:AQIBAAACb3RoZXI=]"},
+	}
+	if err := config.Save(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.EnvSecrets) != 2 {
+		t.Fatalf("expected 2 env secrets, got %d", len(loaded.EnvSecrets))
+	}
+	if loaded.EnvSecrets[0].Name != "GITHUB_TOKEN" {
+		t.Errorf("name[0] = %q, want GITHUB_TOKEN", loaded.EnvSecrets[0].Name)
+	}
+	if loaded.EnvSecrets[0].Value != "ENC[age:AQIBAAABc29tZQ==]" {
+		t.Errorf("value[0] = %q, want ENC[age:...]", loaded.EnvSecrets[0].Value)
+	}
+}
+
+func TestEnvSecretsBackwardsCompat(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.EnvSecrets != nil {
+		t.Errorf("expected nil EnvSecrets for old config, got %v", loaded.EnvSecrets)
+	}
+}
+
+func TestLoadRejectsInvalidEnvSecretName(t *testing.T) {
+	cases := []struct {
+		name     string
+		envName  string
+		fragment string
+	}{
+		{"leading digit", "1FOO", "invalid name"},
+		{"hyphen", "FOO-BAR", "invalid name"},
+		{"equals sign", "PATH=x", "invalid name"},
+		{"empty", "", "invalid name"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\nenv_secrets:\n  - name: \"" + tc.envName + "\"\n    value: \"ENC[age:AQIBAAAB]\"\n")
+			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := config.Load(dir)
+			if err == nil {
+				t.Fatalf("expected error for name %q", tc.envName)
+			}
+			if !strings.Contains(err.Error(), tc.fragment) {
+				t.Errorf("error %q does not contain %q", err.Error(), tc.fragment)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsReservedEnvSecretName(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\nenv_secrets:\n  - name: HTTP_PROXY\n    value: \"ENC[age:AQIBAAAB]\"\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("expected 'reserved' error, got %v", err)
+	}
+}
+
+func TestLoadRejectsDuplicateEnvSecretName(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\nenv_secrets:\n  - name: GITHUB_TOKEN\n    value: \"ENC[age:AQIBAAAB]\"\n  - name: GITHUB_TOKEN\n    value: \"ENC[age:AQIBAAAC]\"\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("expected 'duplicate' error, got %v", err)
+	}
+}
+
+func TestLoadRejectsPlaintextEnvSecretValue(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("container_image: airlock-claude:latest\nproxy_image: airlock-proxy:latest\nnetwork_name: airlock-net\nproxy_port: 8080\nvolume_name: airlock-claude-home\nenv_secrets:\n  - name: GITHUB_TOKEN\n    value: \"plaintext-token-value\"\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "ENC[age:") {
+		t.Fatalf("expected 'ENC[age:' error, got %v", err)
+	}
 }

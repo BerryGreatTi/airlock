@@ -6,6 +6,7 @@ struct WorkspaceSettingsView: View {
     @Bindable var appState: AppState
     @State private var globalSettings = AppSettings()
     @State private var passthroughText = ""
+    @State private var showRemoveAnthropicConfirm = false
 
     var body: some View {
         Form {
@@ -50,6 +51,24 @@ struct WorkspaceSettingsView: View {
                 TextEditor(text: $passthroughText)
                     .font(.system(size: 12, design: .monospaced))
                     .frame(height: 80)
+
+                let parsedNonEmpty = PassthroughPolicy.splitHostLines(passthroughText)
+                if !parsedNonEmpty.isEmpty {
+                    let missing = PassthroughPolicy.missingProtectedHosts(from: parsedNonEmpty)
+                    if !missing.isEmpty {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
+                            Text("This override would remove \(missing.joined(separator: ", ")) from passthrough. Airlock would decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers.")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(8)
+                        .background(Color.yellow.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                }
             }
 
             if appState.isActive(workspace) {
@@ -71,6 +90,17 @@ struct WorkspaceSettingsView: View {
         .formStyle(.grouped)
         .padding()
         .onAppear { load() }
+        .alert("Disable Anthropic passthrough for this workspace?", isPresented: $showRemoveAnthropicConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove anyway", role: .destructive) {
+                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+            }
+        } message: {
+            let missing = PassthroughPolicy.missingProtectedHosts(
+                from: PassthroughPolicy.splitHostLines(passthroughText)
+            )
+            Text("\(missing.joined(separator: ", ")) will not be in this workspace's passthrough list. Airlock will decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
+        }
     }
 
     private func load() {
@@ -79,10 +109,19 @@ struct WorkspaceSettingsView: View {
     }
 
     private func save() {
-        let hosts = passthroughText
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        let hosts = PassthroughPolicy.splitHostLines(passthroughText)
+        // Empty override = inherit global; not flagged.
+        if !hosts.isEmpty {
+            let missing = PassthroughPolicy.missingProtectedHosts(from: hosts)
+            if !missing.isEmpty {
+                showRemoveAnthropicConfirm = true
+                return
+            }
+        }
+        commitSave(hosts: hosts)
+    }
+
+    private func commitSave(hosts: [String]) {
         if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
             appState.workspaces[idx].passthroughHostsOverride = hosts.isEmpty ? nil : hosts
         }

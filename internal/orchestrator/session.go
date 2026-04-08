@@ -23,6 +23,7 @@ type SessionParams struct {
 	TmpDir       string
 	ShadowMounts []secrets.ShadowMount
 	MappingPath  string
+	EnvSecrets   []secrets.EnvVar
 }
 
 // ExtractVolumeSettings reads settings.json and settings.local.json from the
@@ -91,6 +92,7 @@ func StartSession(ctx context.Context, runtime container.ContainerRuntime, param
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
+		EnvSecrets:       params.EnvSecrets,
 	}
 	if err := opts.Validate(); err != nil {
 		return fmt.Errorf("invalid run options: %w", err)
@@ -169,6 +171,7 @@ func StartDetachedSession(ctx context.Context, runtime container.ContainerRuntim
 		ClaudeDir:        params.ClaudeDir,
 		ProxyPort:        cfg.ProxyPort,
 		PassthroughHosts: cfg.PassthroughHosts,
+		EnvSecrets:       params.EnvSecrets,
 	}
 	if err := opts.Validate(); err != nil {
 		return fmt.Errorf("invalid run options: %w", err)

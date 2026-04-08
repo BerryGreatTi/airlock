@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/taeikkim92/airlock/internal/fsutil"
 	"gopkg.in/yaml.v3"
@@ -12,8 +14,17 @@ import (
 // SecretFileConfig describes a user-registered secret file for encryption.
 type SecretFileConfig struct {
 	Path        string   `yaml:"path"`
-	Format      string   `yaml:"format"`               // "dotenv", "json", "yaml", "ini", "properties", "text"
+	Format      string   `yaml:"format"`                 // "dotenv", "json", "yaml", "ini", "properties", "text"
 	EncryptKeys []string `yaml:"encrypt_keys,omitempty"` // keys to encrypt; empty = encrypt all
+}
+
+// EnvSecretConfig is a single encrypted environment variable that
+// airlock injects into the agent container as NAME=ENC[age:...].
+// Value is always an ENC[age:...] ciphertext; plaintext is never
+// persisted in config.yaml.
+type EnvSecretConfig struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 type Config struct {
@@ -24,6 +35,48 @@ type Config struct {
 	PassthroughHosts []string           `yaml:"passthrough_hosts"`
 	VolumeName       string             `yaml:"volume_name"`
 	SecretFiles      []SecretFileConfig `yaml:"secret_files,omitempty"`
+	EnvSecrets       []EnvSecretConfig  `yaml:"env_secrets,omitempty"`
+}
+
+// EnvVarNamePattern is the POSIX env var identifier pattern. Exported so
+// error messages can reference the canonical rule instead of hardcoding it.
+const EnvVarNamePattern = `^[A-Za-z_][A-Za-z0-9_]*$`
+
+var envNameRegex = regexp.MustCompile(EnvVarNamePattern)
+
+// IsValidEnvVarName reports whether name is a valid POSIX env var identifier.
+// Exported so CLI validation can reuse the canonical rule instead of
+// reimplementing it.
+func IsValidEnvVarName(name string) bool {
+	return envNameRegex.MatchString(name)
+}
+
+// validateEnvSecrets enforces invariants on cfg.EnvSecrets:
+// 1. Name matches POSIX env var format ^[A-Za-z_][A-Za-z0-9_]*$
+// 2. Name is not in ReservedEnvNames
+// 3. Names are unique within env_secrets[]
+// 4. Value starts with "ENC[age:" and ends with "]"
+//
+// Any violation is a hard error so the user discovers misconfigurations
+// at load time, not at session start.
+func validateEnvSecrets(cfg *Config) error {
+	seen := make(map[string]bool, len(cfg.EnvSecrets))
+	for i, es := range cfg.EnvSecrets {
+		if !IsValidEnvVarName(es.Name) {
+			return fmt.Errorf("env secret at index %d: invalid name %q: must match %s", i, es.Name, EnvVarNamePattern)
+		}
+		if ReservedEnvNames[es.Name] {
+			return fmt.Errorf("env secret name %q is reserved by airlock", es.Name)
+		}
+		if seen[es.Name] {
+			return fmt.Errorf("duplicate env secret name %q", es.Name)
+		}
+		seen[es.Name] = true
+		if !strings.HasPrefix(es.Value, "ENC[age:") || !strings.HasSuffix(es.Value, "]") {
+			return fmt.Errorf("env secret %q: value is not an ENC[age:...] ciphertext", es.Name)
+		}
+	}
+	return nil
 }
 
 func Default() Config {
@@ -55,6 +108,9 @@ func Load(airlockDir string) (Config, error) {
 	cfg := Default()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config: %w", err)
+	}
+	if err := validateEnvSecrets(&cfg); err != nil {
+		return Config{}, fmt.Errorf("config load: %w", err)
 	}
 	return cfg, nil
 }

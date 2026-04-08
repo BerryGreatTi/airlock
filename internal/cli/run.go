@@ -115,6 +115,9 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 				fileScanner = secrets.NewFileScanner(cfg.SecretFiles, workspace)
 				scanners = append(scanners, fileScanner)
 			}
+			if len(cfg.EnvSecrets) > 0 {
+				scanners = append(scanners, secrets.NewEnvSecretScanner(cfg.EnvSecrets))
+			}
 			if runEnvFile != "" && (fileScanner == nil || !fileScanner.ContainsPath(runEnvFile)) {
 				scanners = append(scanners, secrets.NewEnvScanner(runEnvFile, workspace))
 			}
@@ -136,6 +139,7 @@ All airlock commands must be run from the project root (where .airlock/ is).`,
 				return fmt.Errorf("scan secrets: %w", err)
 			}
 			params.ShadowMounts = scanResult.Mounts
+			params.EnvSecrets = scanResult.Env
 			if len(scanResult.Mapping) > 0 {
 				mappingPath, mappingErr := secrets.SaveMapping(scanResult.Mapping, tmpDir)
 				if mappingErr != nil {

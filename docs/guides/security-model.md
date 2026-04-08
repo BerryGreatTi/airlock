@@ -33,9 +33,11 @@ All secrets are encrypted with [age](https://age-encryption.org/) (X25519) befor
 
 | Source | Scanner | Scope |
 |--------|---------|-------|
-| `.env` files | `EnvScanner` | All values encrypted unconditionally |
+| `.env` files (via `--env` flag) | `EnvScanner` | All values encrypted unconditionally |
+| Registered files in `.airlock/config.yaml:secret_files[]` | `FileScanner` | Multi-format (dotenv, JSON, YAML, INI, properties, text); selective or whole-file |
 | `.claude/settings.json` | `ClaudeScanner` | Heuristic detection (key name + value prefix) |
 | `.claude/settings.local.json` | `ClaudeScanner` | Same heuristic |
+| Env secrets in `.airlock/config.yaml:env_secrets[]` | `EnvSecretScanner` | Injected as `NAME=ENC[age:...]` into the agent container's environment |
 
 ```
 Host settings.json:  "SLACK_TOKEN": "xoxb-1234-abcdef"
@@ -61,6 +63,15 @@ A mitmproxy sidecar intercepts outbound HTTP/HTTPS traffic from the agent contai
 4. Request reaches the external API with real credentials
 
 **Passthrough behavior:** The GUI defaults to passthrough for Anthropic API hosts (`api.anthropic.com`, `auth.anthropic.com`) so that `ENC[age:...]` secrets in Claude Code traffic remain encrypted end-to-end. The CLI defaults to no passthrough (all traffic decrypted). Users can configure passthrough for additional hosts via `--passthrough-hosts` CLI flag, `passthrough_hosts` in `config.yaml`, or the GUI Settings panel.
+
+**Passthrough guardrail (GUI):** Removing `api.anthropic.com` or `auth.anthropic.com` from passthrough subverts the privacy property — the proxy then substitutes ciphertext to plaintext on outbound Anthropic traffic, and Anthropic receives plaintext secrets in the conversation body. The GUI surfaces this as a non-blocking guardrail: an inline yellow warning appears live in the Settings and WorkspaceSettings passthrough editors, a destructive-styled confirmation alert fires on Save, and a persistent banner sits at the top of the Secrets tab whenever the resolved passthrough list is missing a protected host. The CLI does not guard this path; `airlock run --passthrough-hosts ""` is an intentional power-user override and the CLI already echoes the resolved list on session start. See [ADR-0010](../decisions/ADR-0010-environment-variable-secrets.md).
+
+**Two Settings layers:** The GUI has two distinct places to edit passthrough hosts and they operate at different scopes.
+
+- **Global Settings** (gear icon in the sidebar, or `Airlock → Settings...` menu) is the install-wide default, persisted in `~/Library/Application Support/Airlock/settings.json`. The `Network Defaults` editor here seeds the fall-through value for every workspace that has no per-workspace override.
+- **Workspace Settings tab** (Cmd+4 on a selected workspace) is per-workspace, persisted in that workspace's entry in `workspaces.json`. The `Network Overrides` editor here is OPTIONAL — an empty editor means "inherit global," a non-empty editor means "use this exact list for this workspace instead." The caption line reminds the user of the current global value.
+
+At session start, `ResolvedSettings.passthroughHosts = workspace.passthroughHostsOverride ?? global.passthroughHosts`. This two-layer model is subtle; if you are editing passthrough and not seeing the change take effect, confirm whether you are editing the global defaults or the workspace override.
 
 **Response audit logging:** The proxy logs response metadata (status code, content type, size) for all traffic. Response body content is never logged.
 
