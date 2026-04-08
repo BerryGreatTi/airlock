@@ -68,6 +68,35 @@ Rejected. Power-user path; the CLI already echoes the resolved passthrough list 
 ### Block passthrough removal entirely (no escape hatch)
 Rejected. Testing legitimately requires removing Anthropic from passthrough sometimes (e.g., to observe what the proxy would rewrite). Making it impossible would be hostile to power users. The confirmation alert is the right compromise: conscious, not blocked.
 
+## Known Edge Cases
+
+### Stale `settings.json` with explicit empty `passthroughHosts`
+
+Installs that existed before commit `7390166` (2026-04-03) have `"passthroughHosts":[]` persisted in `~/Library/Application Support/Airlock/settings.json`. The Swift `AppSettings.init(from:)` decoder uses `decodeIfPresent` which only substitutes the `["api.anthropic.com", "auth.anthropic.com"]` default when the key is **absent**, not when it is **present but empty**. A user upgrading across this release will therefore start with a global passthrough list of `[]`, which means:
+
+- The workspace Settings tab shows `Passthrough hosts override (No default passthrough hosts)` instead of the expected `Default: api.anthropic.com, auth.anthropic.com`.
+- Every workspace with `passthroughHostsOverride == nil` inherits the empty global list at session start.
+- The Secrets tab banner from this ADR's guardrail correctly fires in this state (`⚠ Anthropic passthrough disabled — secrets will be sent as plaintext to api.anthropic.com, auth.anthropic.com`), surfacing the issue to the user.
+
+**Decision: ship as-is.** No users were upgrading across this release (the project had not distributed the pre-`7390166` version yet). The guardrail banner is the safety net. An auto-heal in the decoder (treat empty array as absent) was considered and rejected because it would silently undo a user's future intentional decision to empty the list.
+
+**Fix for affected users:** Open global Settings, add `api.anthropic.com` and `auth.anthropic.com` to the Network Defaults editor, click Save. Verified manually in Scenario 1 of the manual test runbook.
+
+## Future Considerations
+
+### Passthrough list scope: global vs. workspace
+
+The manual test exposed a latent tension in the "global defaults + per-workspace override" model: users intuitively expect passthrough settings to be workspace-local (`"I expect that each workspace has its own passthrough list"`). Four alternative models were discussed during session 2026-04-08:
+
+- **A. Per-workspace only, delete global field entirely.** Each workspace owns its passthrough list, populated with Anthropic defaults at workspace creation. Global concept removed.
+- **B. Per-workspace defaults at creation, keep global as template.** New workspaces snapshot the current global list into their own override at creation time. Global becomes a template for new workspaces, not a runtime fall-through.
+- **C. Keep current model.** Fix the stale-`settings.json` decoder as a one-line auto-heal. Smallest possible change.
+- **D. Additive merge (union of global + workspace).** Workspace field becomes strictly additive (`passthroughHostsAdditions: [String]`). Anthropic cannot be removed at the workspace level — the footgun is removed by construction. The guardrail tasks (14–17) become partially dead code (workspace removal path no longer reachable).
+
+Approach D is the most interesting because it eliminates the footgun by construction rather than by warning, and it makes the model simpler: "Anthropic is always in passthrough for every workspace; you can add but not remove from a workspace." The trade-off is losing the per-workspace "remove Anthropic from passthrough for one specific workspace" capability, which exists today but is precisely the footgun the guardrail defends against.
+
+**Decision: defer pending pilot-user feedback.** The user will discuss with pilot users and return with a direction. No code changes until that conversation completes. This section exists so the exploration is not lost and the trade-offs don't need to be re-derived in a future session.
+
 ## Related
 - ADR-0005 (settings secret protection)
 - ADR-0008 (multi-format secrets)

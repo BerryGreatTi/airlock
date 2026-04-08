@@ -66,6 +66,13 @@ A mitmproxy sidecar intercepts outbound HTTP/HTTPS traffic from the agent contai
 
 **Passthrough guardrail (GUI):** Removing `api.anthropic.com` or `auth.anthropic.com` from passthrough subverts the privacy property — the proxy then substitutes ciphertext to plaintext on outbound Anthropic traffic, and Anthropic receives plaintext secrets in the conversation body. The GUI surfaces this as a non-blocking guardrail: an inline yellow warning appears live in the Settings and WorkspaceSettings passthrough editors, a destructive-styled confirmation alert fires on Save, and a persistent banner sits at the top of the Secrets tab whenever the resolved passthrough list is missing a protected host. The CLI does not guard this path; `airlock run --passthrough-hosts ""` is an intentional power-user override and the CLI already echoes the resolved list on session start. See [ADR-0010](../decisions/ADR-0010-environment-variable-secrets.md).
 
+**Two Settings layers:** The GUI has two distinct places to edit passthrough hosts and they operate at different scopes.
+
+- **Global Settings** (gear icon in the sidebar, or `Airlock → Settings...` menu) is the install-wide default, persisted in `~/Library/Application Support/Airlock/settings.json`. The `Network Defaults` editor here seeds the fall-through value for every workspace that has no per-workspace override.
+- **Workspace Settings tab** (Cmd+4 on a selected workspace) is per-workspace, persisted in that workspace's entry in `workspaces.json`. The `Network Overrides` editor here is OPTIONAL — an empty editor means "inherit global," a non-empty editor means "use this exact list for this workspace instead." The caption line reminds the user of the current global value.
+
+At session start, `ResolvedSettings.passthroughHosts = workspace.passthroughHostsOverride ?? global.passthroughHosts`. This two-layer model is subtle; if you are editing passthrough and not seeing the change take effect, confirm whether you are editing the global defaults or the workspace override.
+
 **Response audit logging:** The proxy logs response metadata (status code, content type, size) for all traffic. Response body content is never logged.
 
 ## What This Protects
