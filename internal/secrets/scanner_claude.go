@@ -86,6 +86,17 @@ func (s *ClaudeScanner) processFile(f claudeSettingsFile, opts ScanOpts) ([]Shad
 	}
 
 	if mcpServers, ok := root["mcpServers"].(map[string]any); ok {
+		// Security-critical ordering: filter out disallowed MCP entries
+		// BEFORE the encrypt loop below. The subsequent loop iterates the
+		// already-filtered map, so secrets belonging to filtered-out MCPs
+		// never enter the proxy mapping. Reordering these two blocks would
+		// leak plaintext credentials of disabled MCPs to the proxy
+		// decryption table.
+		if opts.EnabledMCPServers != nil {
+			if filterMCPServers(mcpServers, opts.EnabledMCPServers) {
+				modified = true
+			}
+		}
 		for _, serverVal := range mcpServers {
 			server, ok := serverVal.(map[string]any)
 			if !ok {
@@ -120,6 +131,24 @@ func (s *ClaudeScanner) processFile(f claudeSettingsFile, opts ScanOpts) ([]Shad
 
 	mount := ShadowMount{HostPath: tmpPath, ContainerPath: f.containerPath}
 	return []ShadowMount{mount}, mapping, nil
+}
+
+// filterMCPServers removes entries from mcpServers whose names are not in the
+// allowed list. Mutates mcpServers in place. Returns true if at least one entry
+// was removed (so the caller knows to re-marshal the shadow mount).
+func filterMCPServers(mcpServers map[string]any, allowed []string) bool {
+	allowSet := make(map[string]struct{}, len(allowed))
+	for _, name := range allowed {
+		allowSet[name] = struct{}{}
+	}
+	removed := false
+	for name := range mcpServers {
+		if _, ok := allowSet[name]; !ok {
+			delete(mcpServers, name)
+			removed = true
+		}
+	}
+	return removed
 }
 
 func encryptEnvBlock(envBlock map[string]any, publicKey string, mapping map[string]string) bool {

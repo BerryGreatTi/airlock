@@ -43,12 +43,8 @@ var configExportCmd = &cobra.Command{
 		if err := os.MkdirAll(dstDir, 0o700); err != nil {
 			return fmt.Errorf("create export directory: %w", err)
 		}
-		var items []string
-		if exportItems != "" {
-			for _, item := range strings.Split(exportItems, ",") {
-				items = append(items, strings.TrimSpace(item))
-			}
-		} else {
+		items := parseCSVList(exportItems)
+		if len(items) == 0 {
 			items = append(items, defaultImportItems...)
 		}
 		for _, item := range items {

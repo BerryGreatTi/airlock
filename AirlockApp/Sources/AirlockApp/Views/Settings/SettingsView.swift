@@ -11,6 +11,9 @@ struct GlobalSettingsSheet: View {
     @State private var showImportSheet = false
     @State private var showResetAlert = false
     @State private var showRemoveAnthropicConfirm = false
+    @State private var discoveredMCPServers: [String] = []
+    @State private var restrictMCPServers = false
+    @State private var enabledMCPSelection: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,6 +87,24 @@ struct GlobalSettingsSheet: View {
                         .padding(8)
                         .background(Color.yellow.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                }
+
+                Section("MCP Servers") {
+                    MCPAllowListPicker(
+                        enabled: $restrictMCPServers,
+                        selection: $enabledMCPSelection,
+                        discovered: discoveredMCPServers,
+                        toggleLabel: "Restrict available MCP servers",
+                        restrictedCaption: "Only the checked MCP servers will be active inside the container.",
+                        unrestrictedCaption: "All MCP servers from ~/.claude/settings.json will be available.",
+                        emptyInventoryCaption: "No MCP servers found in ~/.claude/settings.json. Use `claude mcp add` to install one.",
+                        noneSelectedWarning: "No MCP servers will be available — the container will see an empty mcpServers map."
+                    )
+                    .onChange(of: restrictMCPServers) { _, newValue in
+                        if !newValue {
+                            enabledMCPSelection = []
+                        }
                     }
                 }
 
@@ -170,6 +191,14 @@ struct GlobalSettingsSheet: View {
         let store = WorkspaceStore()
         settings = (try? store.loadSettings()) ?? AppSettings()
         passthroughText = settings.passthroughHosts.joined(separator: "\n")
+        discoveredMCPServers = MCPInventoryService.discoverServerNames()
+        if let allowed = settings.enabledMCPServers {
+            restrictMCPServers = true
+            enabledMCPSelection = Set(allowed)
+        } else {
+            restrictMCPServers = false
+            enabledMCPSelection = []
+        }
     }
 
     private func save() {
@@ -184,6 +213,9 @@ struct GlobalSettingsSheet: View {
 
     private func commitSave(hosts: [String]) {
         settings.passthroughHosts = hosts
+        settings.enabledMCPServers = restrictMCPServers
+            ? enabledMCPSelection.sorted()
+            : nil
 
         let store = WorkspaceStore()
         do {

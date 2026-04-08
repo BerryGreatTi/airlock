@@ -67,12 +67,11 @@ Existing files in the volume are skipped unless --force is set.`,
 		var items []string
 		if importAll {
 			items = append(append(items, defaultImportItems...), optionalImportItems...)
-		} else if importItems != "" {
-			for _, item := range strings.Split(importItems, ",") {
-				items = append(items, strings.TrimSpace(item))
-			}
 		} else {
-			items = append(items, defaultImportItems...)
+			items = parseCSVList(importItems)
+			if len(items) == 0 {
+				items = append(items, defaultImportItems...)
+			}
 		}
 		for _, item := range items {
 			if !allowedImportItems[item] {

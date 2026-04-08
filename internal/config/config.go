@@ -36,6 +36,17 @@ type Config struct {
 	VolumeName       string             `yaml:"volume_name"`
 	SecretFiles      []SecretFileConfig `yaml:"secret_files,omitempty"`
 	EnvSecrets       []EnvSecretConfig  `yaml:"env_secrets,omitempty"`
+	// EnabledMCPServers, when non-nil, restricts the agent container to only
+	// the named MCP servers. Entries from the user's settings.json that are
+	// not in this list are removed before the file is shadow-mounted into the
+	// container. nil = no filtering (default behavior, all MCPs enabled).
+	// Empty slice = filter out all MCP servers.
+	//
+	// NOTE: `omitempty` is intentionally absent. yaml.v3's omitempty collapses
+	// both nil and empty slices into "field absent on Load", which would
+	// silently flip the security-relevant "filter all" state ([]) to
+	// "no filtering" (nil) on a save/load round-trip.
+	EnabledMCPServers []string `yaml:"enabled_mcp_servers"`
 }
 
 // EnvVarNamePattern is the POSIX env var identifier pattern. Exported so

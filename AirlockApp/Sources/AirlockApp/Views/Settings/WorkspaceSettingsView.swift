@@ -7,6 +7,9 @@ struct WorkspaceSettingsView: View {
     @State private var globalSettings = AppSettings()
     @State private var passthroughText = ""
     @State private var showRemoveAnthropicConfirm = false
+    @State private var discoveredMCPServers: [String] = []
+    @State private var overrideMCPServers = false
+    @State private var workspaceMCPSelection: Set<String> = []
 
     var body: some View {
         Form {
@@ -71,6 +74,26 @@ struct WorkspaceSettingsView: View {
                 }
             }
 
+            Section("MCP Servers Override") {
+                MCPAllowListPicker(
+                    enabled: $overrideMCPServers,
+                    selection: $workspaceMCPSelection,
+                    discovered: discoveredMCPServers,
+                    toggleLabel: "Override global MCP setting",
+                    restrictedCaption: "Only the checked MCP servers will be active in this workspace.",
+                    unrestrictedCaption: inheritedMCPDescription,
+                    emptyInventoryCaption: "No MCP servers found in ~/.claude/settings.json.",
+                    noneSelectedWarning: "No MCP servers will be available in this workspace."
+                )
+                .onChange(of: overrideMCPServers) { _, newValue in
+                    if !newValue {
+                        workspaceMCPSelection = []
+                    } else if let global = globalSettings.enabledMCPServers {
+                        workspaceMCPSelection = Set(global)
+                    }
+                }
+            }
+
             if appState.isActive(workspace) {
                 HStack(spacing: 6) {
                     Image(systemName: "info.circle")
@@ -103,9 +126,26 @@ struct WorkspaceSettingsView: View {
         }
     }
 
+    private var inheritedMCPDescription: String {
+        if let global = globalSettings.enabledMCPServers {
+            return global.isEmpty
+                ? "Inheriting global setting (no MCP servers enabled)."
+                : "Inheriting global setting: \(global.joined(separator: ", "))."
+        }
+        return "Inheriting global setting (all MCP servers enabled)."
+    }
+
     private func load() {
         globalSettings = (try? WorkspaceStore().loadSettings()) ?? AppSettings()
         passthroughText = workspace.passthroughHostsOverride?.joined(separator: "\n") ?? ""
+        discoveredMCPServers = MCPInventoryService.discoverServerNames()
+        if let override = workspace.enabledMCPServersOverride {
+            overrideMCPServers = true
+            workspaceMCPSelection = Set(override)
+        } else {
+            overrideMCPServers = false
+            workspaceMCPSelection = []
+        }
     }
 
     private func save() {
@@ -124,6 +164,9 @@ struct WorkspaceSettingsView: View {
     private func commitSave(hosts: [String]) {
         if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
             appState.workspaces[idx].passthroughHostsOverride = hosts.isEmpty ? nil : hosts
+            appState.workspaces[idx].enabledMCPServersOverride = overrideMCPServers
+                ? workspaceMCPSelection.sorted()
+                : nil
         }
         try? WorkspaceStore().saveWorkspaces(appState.workspaces)
     }

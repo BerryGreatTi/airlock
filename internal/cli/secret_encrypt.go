@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/taeikkim92/airlock/internal/config"
@@ -59,8 +58,8 @@ func RunSecretEncrypt(filePath, mode, formatOverride, keysDir, airlockDir string
 		}
 	default:
 		keySet = make(map[string]bool)
-		for _, k := range strings.Split(mode, ",") {
-			keySet[strings.TrimSpace(k)] = true
+		for _, k := range parseCSVList(mode) {
+			keySet[k] = true
 		}
 	}
 

@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/taeikkim92/airlock/internal/crypto"
@@ -42,8 +41,8 @@ func RunSecretDecrypt(filePath, mode, formatOverride, keysDir string) error {
 	var keySet map[string]bool
 	if mode != "all" {
 		keySet = make(map[string]bool)
-		for _, k := range strings.Split(mode, ",") {
-			keySet[strings.TrimSpace(k)] = true
+		for _, k := range parseCSVList(mode) {
+			keySet[k] = true
 		}
 	}
 

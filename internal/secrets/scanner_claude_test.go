@@ -217,6 +217,161 @@ func TestClaudeScannerMissingFile(t *testing.T) {
 	}
 }
 
+func TestClaudeScannerFiltersMCPServersByAllowlist(t *testing.T) {
+	pub, priv := setupTestKeys(t)
+	tmpDir := t.TempDir()
+	homeDir := t.TempDir()
+
+	claudeDir := filepath.Join(homeDir, ".claude")
+	os.MkdirAll(claudeDir, 0755)
+
+	settings := map[string]any{
+		"mcpServers": map[string]any{
+			"slack": map[string]any{
+				"command": "npx",
+				"env":     map[string]any{"SLACK_TOKEN": "xoxb-1234567890-abcdef"},
+			},
+			"github": map[string]any{
+				"command": "npx",
+				"env":     map[string]any{"GITHUB_TOKEN": "ghp_abcdefghijklmnopqrst"},
+			},
+			"jira": map[string]any{
+				"command": "npx",
+				"env":     map[string]any{"JIRA_TOKEN": "ATATT3xFfGF0T5BlAhR56789"},
+			},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), data, 0644)
+
+	scanner := NewClaudeScanner()
+	result, err := scanner.Scan(ScanOpts{
+		Workspace:         tmpDir,
+		HomeDir:           homeDir,
+		PublicKey:         pub,
+		PrivateKey:        priv,
+		TmpDir:            tmpDir,
+		EnabledMCPServers: []string{"slack", "github"},
+	})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if len(result.Mounts) != 1 {
+		t.Fatalf("expected 1 mount, got %d", len(result.Mounts))
+	}
+
+	processed, _ := os.ReadFile(result.Mounts[0].HostPath)
+	var decoded map[string]any
+	if err := json.Unmarshal(processed, &decoded); err != nil {
+		t.Fatalf("parse shadow mount JSON: %v", err)
+	}
+	mcps, ok := decoded["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatal("mcpServers missing from shadow mount")
+	}
+	if _, ok := mcps["slack"]; !ok {
+		t.Error("slack should be in filtered mcpServers")
+	}
+	if _, ok := mcps["github"]; !ok {
+		t.Error("github should be in filtered mcpServers")
+	}
+	if _, ok := mcps["jira"]; ok {
+		t.Error("jira should be filtered out of mcpServers")
+	}
+	// Mapping should only contain secrets for retained MCPs.
+	if len(result.Mapping) != 2 {
+		t.Errorf("expected 2 mapping entries (slack + github), got %d", len(result.Mapping))
+	}
+	for _, plain := range result.Mapping {
+		if plain == "ATATT3xFfGF0T5BlAhR56789" {
+			t.Error("jira secret must not be in mapping — MCP was filtered out")
+		}
+	}
+}
+
+func TestClaudeScannerEmptyAllowlistFiltersAllMCPServers(t *testing.T) {
+	pub, priv := setupTestKeys(t)
+	tmpDir := t.TempDir()
+	homeDir := t.TempDir()
+
+	claudeDir := filepath.Join(homeDir, ".claude")
+	os.MkdirAll(claudeDir, 0755)
+
+	settings := map[string]any{
+		"env": map[string]any{"ANTHROPIC_API_KEY": "sk-ant-api03-realkey12345"},
+		"mcpServers": map[string]any{
+			"slack": map[string]any{
+				"env": map[string]any{"SLACK_TOKEN": "xoxb-1234567890-abcdef"},
+			},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), data, 0644)
+
+	scanner := NewClaudeScanner()
+	result, err := scanner.Scan(ScanOpts{
+		Workspace:         tmpDir,
+		HomeDir:           homeDir,
+		PublicKey:         pub,
+		PrivateKey:        priv,
+		TmpDir:            tmpDir,
+		EnabledMCPServers: []string{}, // explicit empty = none enabled
+	})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if len(result.Mounts) != 1 {
+		t.Fatalf("expected 1 mount (top-level env still needs encryption), got %d", len(result.Mounts))
+	}
+	processed, _ := os.ReadFile(result.Mounts[0].HostPath)
+	var decoded map[string]any
+	if err := json.Unmarshal(processed, &decoded); err != nil {
+		t.Fatalf("parse shadow mount JSON: %v", err)
+	}
+	if mcps, ok := decoded["mcpServers"].(map[string]any); ok {
+		if len(mcps) != 0 {
+			t.Errorf("expected mcpServers to be empty, got %v", mcps)
+		}
+	}
+	for _, plain := range result.Mapping {
+		if plain == "xoxb-1234567890-abcdef" {
+			t.Error("slack secret must not be in mapping when allowlist is empty")
+		}
+	}
+}
+
+func TestClaudeScannerNilAllowlistKeepsAllMCPServers(t *testing.T) {
+	pub, priv := setupTestKeys(t)
+	tmpDir := t.TempDir()
+	homeDir := t.TempDir()
+
+	claudeDir := filepath.Join(homeDir, ".claude")
+	os.MkdirAll(claudeDir, 0755)
+
+	settings := map[string]any{
+		"mcpServers": map[string]any{
+			"slack": map[string]any{
+				"env": map[string]any{"SLACK_TOKEN": "xoxb-1234567890-abcdef"},
+			},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), data, 0644)
+
+	scanner := NewClaudeScanner()
+	result, err := scanner.Scan(ScanOpts{
+		Workspace: tmpDir, HomeDir: homeDir,
+		PublicKey: pub, PrivateKey: priv, TmpDir: tmpDir,
+		// EnabledMCPServers omitted => nil => no filtering
+	})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if len(result.Mapping) != 1 {
+		t.Fatalf("expected 1 mapping entry (slack secret), got %d", len(result.Mapping))
+	}
+}
+
 func TestClaudeScannerProjectAndGlobal(t *testing.T) {
 	pub, priv := setupTestKeys(t)
 	tmpDir := t.TempDir()

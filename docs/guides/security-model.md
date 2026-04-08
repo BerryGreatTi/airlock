@@ -75,6 +75,19 @@ At session start, `ResolvedSettings.passthroughHosts = workspace.passthroughHost
 
 **Response audit logging:** The proxy logs response metadata (status code, content type, size) for all traffic. Response body content is never logged.
 
+### Layer 4: MCP Server Allow-List
+
+A per-workspace allow-list restricts which MCP servers from `~/.claude/settings.json` are exposed to the agent container. Filtering happens at scan time in `ClaudeScanner.processFile`: entries in `mcpServers` whose names are not on the allow-list are removed from the in-memory JSON before the shadow mount is written. Their secrets are never registered in the proxy mapping, so a disabled MCP cannot leak credentials even if some other code path tries to substitute them later.
+
+The allow-list is tri-state: `nil` = no filtering (default; all MCPs from settings.json are exposed), `[]` = filter out all MCPs, `[..]` = expose only the named entries. The same `global default + per-workspace override` pattern as passthrough hosts applies, with one important difference: empty lists round-trip safely through `config.yaml` because `Config.EnabledMCPServers` intentionally omits the `omitempty` YAML tag.
+
+The GUI exposes this in two places:
+
+- **Global Settings → MCP Servers** seeds the install-wide default. Toggling `Restrict available MCP servers` exposes a checkbox picker populated from `~/.claude/settings.json` via `MCPInventoryService`.
+- **Workspace Settings → MCP Servers Override** mirrors the picker per workspace. Enabling the override seeds the selection from the global default; clearing the override falls back to the global setting.
+
+The CLI exposes the same control via `airlock run --enabled-mcps slack,github` and `airlock start --enabled-mcps slack,github`. An empty value with the flag (`--enabled-mcps ""`) explicitly disables all MCPs; omitting the flag preserves the existing behavior.
+
 ## What This Protects
 
 | Threat | Protected? | How |
@@ -83,6 +96,7 @@ At session start, `ResolvedSettings.passthroughHosts = workspace.passthroughHost
 | Secret in generated code | Yes | Code contains `ENC[age:...]`, not real keys |
 | Secret pushed to public repo | Yes | Encrypted values are safe to publish |
 | Unauthorized API calls | Partially | Proxy routes all traffic, could add allowlists |
+| Untrusted MCP servers | Partially | Per-workspace allow-list filters mcpServers map at scan time (Layer 4) |
 | Container breakout | Partially | cap-drop=ALL, but kernel exploits possible |
 | Host compromise | No | Private key is on the host |
 
