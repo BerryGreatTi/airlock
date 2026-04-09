@@ -13,7 +13,6 @@ struct NewWorkspaceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.containerService) private var containerService
     @State private var selectedPath: String = ""
-    @State private var envFilePath: String = ""
     @State private var statusMessage: String = ""
     @State private var isProcessing = false
     @State private var checks: [PreCheck] = []
@@ -28,19 +27,6 @@ struct NewWorkspaceSheet: View {
                 TextField("Project directory", text: $selectedPath)
                     .textFieldStyle(.roundedBorder)
                 Button("Browse...") { pickDirectory() }
-            }
-
-            HStack {
-                TextField(".env file (optional)", text: $envFilePath)
-                    .textFieldStyle(.roundedBorder)
-                Button("Browse...") { pickEnvFile() }
-                if !envFilePath.isEmpty {
-                    Button { envFilePath = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
 
             if !checks.isEmpty {
@@ -65,7 +51,6 @@ struct NewWorkspaceSheet: View {
         .padding()
         .frame(width: 500)
         .onChange(of: selectedPath) { _, _ in Task { await runPreChecks() } }
-        .onChange(of: envFilePath) { _, _ in Task { await runPreChecks() } }
     }
 
     private var preCheckList: some View {
@@ -124,28 +109,6 @@ struct NewWorkspaceSheet: View {
             detail: initialized ? nil : "will run airlock init"
         ))
 
-        if !envFilePath.isEmpty {
-            let envContent = (try? String(contentsOfFile: envFilePath, encoding: .utf8)) ?? ""
-            let sensitivePatterns = ["KEY", "SECRET", "PASSWORD", "TOKEN"]
-            let hasPlaintext = envContent
-                .components(separatedBy: .newlines)
-                .contains { line in
-                    let parts = line.split(separator: "=", maxSplits: 1)
-                    guard parts.count == 2 else { return false }
-                    let key = String(parts[0]).uppercased()
-                    let value = String(parts[1])
-                    return sensitivePatterns.contains(where: { key.contains($0) }) && !value.hasPrefix("ENC[age:")
-                }
-            if hasPlaintext {
-                results.append(PreCheck(
-                    id: "secrets",
-                    label: "Plaintext secrets detected",
-                    passed: false,
-                    detail: "will be encrypted on activation"
-                ))
-            }
-        }
-
         // Show synchronous checks immediately, Docker check updates async
         results.append(PreCheck(
             id: "docker",
@@ -171,16 +134,6 @@ struct NewWorkspaceSheet: View {
         }
     }
 
-    private func pickEnvFile() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url {
-            envFilePath = url.path
-        }
-    }
-
     private func addWorkspace() {
         isProcessing = true
         let cli = CLIService()
@@ -202,8 +155,7 @@ struct NewWorkspaceSheet: View {
             let name = URL(filePath: path).lastPathComponent
             let workspace = Workspace(
                 name: name,
-                path: path,
-                envFilePath: envFilePath.isEmpty ? nil : envFilePath
+                path: path
             )
             appState.workspaces.append(workspace)
             appState.selectedWorkspaceID = workspace.id
