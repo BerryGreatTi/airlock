@@ -80,7 +80,7 @@ Installs that existed before commit `7390166` (2026-04-03) have `"passthroughHos
 
 **Decision: ship as-is.** No users were upgrading across this release (the project had not distributed the pre-`7390166` version yet). The guardrail banner is the safety net. An auto-heal in the decoder (treat empty array as absent) was considered and rejected because it would silently undo a user's future intentional decision to empty the list.
 
-**Fix for affected users:** Open global Settings, add `api.anthropic.com` and `auth.anthropic.com` to the Network Defaults editor, click Save. Verified manually in Scenario 1 of the manual test runbook.
+**Fix for affected users:** Open global Settings, turn on `Enable passthrough hosts` in the `Passthrough Hosts` section, ensure `api.anthropic.com` and `auth.anthropic.com` are in the editor, click Save. Verified manually in Scenario 1 of the manual test runbook.
 
 ## Future Considerations
 

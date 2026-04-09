@@ -129,10 +129,7 @@ struct WorkspaceSettingsView: View {
                 proceedAfterPassthroughConfirmed()
             }
         } message: {
-            let missing = PassthroughPolicy.missingProtectedHosts(
-                from: PassthroughPolicy.splitHostLines(passthroughText)
-            )
-            Text("\(missing.joined(separator: ", ")) will not be in this workspace's passthrough list. Airlock will decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
+            Text("\(passthroughOverrideMissingHosts.joined(separator: ", ")) will not be in this workspace's passthrough list. Airlock will decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
         }
         .alert("Allow-list blocks Anthropic in this workspace?", isPresented: $showAllowlistAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
@@ -212,17 +209,13 @@ struct WorkspaceSettingsView: View {
         // "confirm anyway" button re-enters this chain via the next helper
         // so users see BOTH warnings if they're both violated.
         //
-        // The override toggle gates the passthrough guardrail: OFF = inherit
-        // global (safe, no check). ON = check the editor contents, including
-        // the empty-editor case which now means "explicitly no passthrough
-        // for this workspace".
-        if overridePassthrough {
-            let hosts = PassthroughPolicy.splitHostLines(passthroughText)
-            let missing = PassthroughPolicy.missingProtectedHosts(from: hosts)
-            if !missing.isEmpty {
-                showRemoveAnthropicConfirm = true
-                return
-            }
+        // `passthroughOverrideMissingHosts` already handles the toggle gate:
+        // when the toggle is OFF it returns empty (inherit is safe); when
+        // ON it checks the editor contents, including the empty-editor case
+        // which now means "explicitly no passthrough for this workspace".
+        if !passthroughOverrideMissingHosts.isEmpty {
+            showRemoveAnthropicConfirm = true
+            return
         }
         proceedAfterPassthroughConfirmed()
     }

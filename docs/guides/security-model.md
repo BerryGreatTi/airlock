@@ -68,8 +68,8 @@ A mitmproxy sidecar intercepts outbound HTTP/HTTPS traffic from the agent contai
 
 **Two Settings layers:** The GUI has two distinct places to edit passthrough hosts and they operate at different scopes.
 
-- **Global Settings** (gear icon in the sidebar, or `Airlock → Settings...` menu) is the install-wide default, persisted in `~/Library/Application Support/Airlock/settings.json`. The `Network Defaults` editor here seeds the fall-through value for every workspace that has no per-workspace override.
-- **Workspace Settings tab** (Cmd+4 on a selected workspace) is per-workspace, persisted in that workspace's entry in `workspaces.json`. The `Network Overrides` editor here is OPTIONAL — an empty editor means "inherit global," a non-empty editor means "use this exact list for this workspace instead." The caption line reminds the user of the current global value.
+- **Global Settings** (gear icon in the sidebar, or `Airlock → Settings...` menu) is the install-wide default, persisted in `~/Library/Application Support/Airlock/settings.json`. The `Passthrough Hosts` section here seeds the fall-through value for every workspace that has no per-workspace override. The section has an `Enable passthrough hosts` toggle: when OFF the stored list is empty (proxy decrypts all HTTPS, including Anthropic), and the editor text is preserved as a draft so the user can re-enable it later.
+- **Workspace Settings tab** (Cmd+4 on a selected workspace) is per-workspace, persisted in that workspace's entry in `workspaces.json`. The `Passthrough Override` section has an `Override global passthrough` toggle: when OFF the workspace inherits the global list; when ON with content the editor text is used; when ON with an empty editor passthrough is explicitly disabled for this workspace (distinct from inherit).
 
 At session start, `ResolvedSettings.passthroughHosts = workspace.passthroughHostsOverride ?? global.passthroughHosts`. This two-layer model is subtle; if you are editing passthrough and not seeing the change take effect, confirm whether you are editing the global defaults or the workspace override.
 

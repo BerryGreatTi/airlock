@@ -325,4 +325,23 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(decoded.passthroughHostsDraft)
         XCTAssertEqual(decoded.passthroughHosts, ["api.anthropic.com", "auth.anthropic.com"])
     }
+
+    func testLegacyEmptyPassthroughHostsWithoutDraftDecodes() throws {
+        // Upgrade path from the pre-7390166 installs referenced in ADR-0010:
+        // settings.json has `passthroughHosts: []` and no `passthroughHostsDraft`
+        // key at all. The new toggle-driven load() should treat this as
+        // "toggle OFF, draft nil, editor empty" without crashing.
+        let legacyJSON = """
+        {
+          "containerImage": "airlock-claude:latest",
+          "proxyImage": "airlock-proxy:latest",
+          "passthroughHosts": [],
+          "theme": "System",
+          "terminal": { "fontName": "Menlo", "fontSize": 12 }
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: legacyJSON)
+        XCTAssertEqual(decoded.passthroughHosts, [])
+        XCTAssertNil(decoded.passthroughHostsDraft)
+    }
 }

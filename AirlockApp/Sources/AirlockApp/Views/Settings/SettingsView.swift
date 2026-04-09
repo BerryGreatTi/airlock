@@ -188,10 +188,7 @@ struct GlobalSettingsSheet: View {
                 proceedAfterPassthroughConfirmed()
             }
         } message: {
-            let missing = PassthroughPolicy.missingProtectedHosts(
-                from: PassthroughPolicy.splitHostLines(passthroughText)
-            )
-            Text("\(missing.joined(separator: ", ")) will be removed from passthrough. Airlock will then decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
+            Text("\(passthroughMissingProtectedHosts.joined(separator: ", ")) will be removed from passthrough. Airlock will then decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
         }
         .alert("Allow-list blocks Anthropic?", isPresented: $showAllowlistAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
@@ -246,6 +243,17 @@ struct GlobalSettingsSheet: View {
         }
     }
 
+    /// Protected Anthropic hosts missing from the passthrough list we are
+    /// about to save. Uses the toggle state so the alert message and the
+    /// guardrail check see the same "parsed" value: toggle OFF means we
+    /// are saving `[]` regardless of what the editor shows.
+    private var passthroughMissingProtectedHosts: [String] {
+        let parsed = enablePassthrough
+            ? PassthroughPolicy.splitHostLines(passthroughText)
+            : []
+        return PassthroughPolicy.missingProtectedHosts(from: parsed)
+    }
+
     private func save() {
         // Guardrails chain: passthrough → allow-list → commit. Each alert's
         // "confirm anyway" button re-enters this chain via the next helper
@@ -256,11 +264,7 @@ struct GlobalSettingsSheet: View {
         // (meaning proxy decrypts everything). missingProtectedHosts([])
         // returns the full protected set, so the guardrail still fires —
         // disabling passthrough is always a confirmed action.
-        let parsed = enablePassthrough
-            ? PassthroughPolicy.splitHostLines(passthroughText)
-            : []
-        let missing = PassthroughPolicy.missingProtectedHosts(from: parsed)
-        if !missing.isEmpty {
+        if !passthroughMissingProtectedHosts.isEmpty {
             showRemoveAnthropicConfirm = true
             return
         }
