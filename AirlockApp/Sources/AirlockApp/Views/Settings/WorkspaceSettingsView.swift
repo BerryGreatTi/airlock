@@ -137,7 +137,7 @@ struct WorkspaceSettingsView: View {
         .alert("Allow-list blocks Anthropic in this workspace?", isPresented: $showAllowlistAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Save anyway", role: .destructive) {
-                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+                commitSave()
             }
         } message: {
             let missing = NetworkAllowlistPolicy.missingProtectedHosts(
@@ -235,10 +235,10 @@ struct WorkspaceSettingsView: View {
                 return
             }
         }
-        commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+        commitSave()
     }
 
-    private func commitSave(hosts: [String]) {
+    private func commitSave() {
         if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
             if overridePassthrough {
                 // Explicit override — empty array means "no passthrough for
