@@ -122,6 +122,19 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(resolved.networkAllowlist, [])
     }
 
+    func testEmptyPassthroughOverrideResolvesToEmptyArray() {
+        // An explicit empty-array passthrough override means "no passthrough
+        // for this workspace" and must win over a populated global setting.
+        // This is the load-bearing distinction that the Passthrough Override
+        // toggle exposes in the workspace settings UI.
+        var global = AppSettings()
+        global.passthroughHosts = ["api.anthropic.com", "auth.anthropic.com"]
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.passthroughHostsOverride = []
+        let resolved = ResolvedSettings(global: global, workspace: ws)
+        XCTAssertEqual(resolved.passthroughHosts, [])
+    }
+
     func testResolvedSettingsNilMCPMeansAllEnabled() {
         // Both global and workspace nil => nil (meaning: do not filter, keep all MCPs)
         let global = AppSettings()
