@@ -278,4 +278,38 @@ final class AppStateTests: XCTestCase {
         // ws2 unaffected
         XCTAssertEqual(state.activationState(for: ws2), .active)
     }
+
+    // MARK: - passthroughHostsDraft round-trip
+
+    func testPassthroughHostsDraftDefaultsToNil() {
+        let settings = AppSettings()
+        XCTAssertNil(settings.passthroughHostsDraft)
+    }
+
+    func testPassthroughHostsDraftEncodeDecodeRoundTrip() throws {
+        var settings = AppSettings()
+        settings.passthroughHosts = []
+        settings.passthroughHostsDraft = ["api.anthropic.com", "auth.anthropic.com"]
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertEqual(decoded.passthroughHosts, [])
+        XCTAssertEqual(decoded.passthroughHostsDraft, ["api.anthropic.com", "auth.anthropic.com"])
+    }
+
+    func testPassthroughHostsDraftMissingKeyDecodesAsNil() throws {
+        // Simulate a settings.json written by the previous app version:
+        // no passthroughHostsDraft key at all.
+        let legacyJSON = """
+        {
+          "containerImage": "airlock-claude:latest",
+          "proxyImage": "airlock-proxy:latest",
+          "passthroughHosts": ["api.anthropic.com", "auth.anthropic.com"],
+          "theme": "System",
+          "terminal": { "fontName": "Menlo", "fontSize": 12 }
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: legacyJSON)
+        XCTAssertNil(decoded.passthroughHostsDraft)
+        XCTAssertEqual(decoded.passthroughHosts, ["api.anthropic.com", "auth.anthropic.com"])
+    }
 }

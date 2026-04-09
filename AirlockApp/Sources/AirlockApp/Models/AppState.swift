@@ -181,6 +181,11 @@ struct AppSettings: Codable, Equatable {
     var containerImage: String = "airlock-claude:latest"
     var proxyImage: String = "airlock-proxy:latest"
     var passthroughHosts: [String] = ["api.anthropic.com", "auth.anthropic.com"]
+    /// Editor text to restore when the global passthrough toggle is OFF.
+    /// Never read by the CLI layer; used only by `SettingsView` to preserve
+    /// the user's in-progress host list across app restarts while the
+    /// toggle is disabled. Nil when the toggle is ON.
+    var passthroughHostsDraft: [String]?
     var enabledMCPServers: [String]?
     var networkAllowlist: [String]?
     var theme: AppTheme = .system
@@ -194,6 +199,7 @@ struct AppSettings: Codable, Equatable {
         containerImage = try container.decodeIfPresent(String.self, forKey: .containerImage) ?? "airlock-claude:latest"
         proxyImage = try container.decodeIfPresent(String.self, forKey: .proxyImage) ?? "airlock-proxy:latest"
         passthroughHosts = try container.decodeIfPresent([String].self, forKey: .passthroughHosts) ?? ["api.anthropic.com", "auth.anthropic.com"]
+        passthroughHostsDraft = try container.decodeIfPresent([String].self, forKey: .passthroughHostsDraft)
         enabledMCPServers = try container.decodeIfPresent([String].self, forKey: .enabledMCPServers)
         networkAllowlist = try container.decodeIfPresent([String].self, forKey: .networkAllowlist)
         theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .system
