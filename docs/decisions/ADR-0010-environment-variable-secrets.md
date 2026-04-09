@@ -74,7 +74,8 @@ Rejected. Testing legitimately requires removing Anthropic from passthrough some
 
 Installs that existed before commit `7390166` (2026-04-03) have `"passthroughHosts":[]` persisted in `~/Library/Application Support/Airlock/settings.json`. The Swift `AppSettings.init(from:)` decoder uses `decodeIfPresent` which only substitutes the `["api.anthropic.com", "auth.anthropic.com"]` default when the key is **absent**, not when it is **present but empty**. A user upgrading across this release will therefore start with a global passthrough list of `[]`, which means:
 
-- The workspace Settings tab shows `Passthrough hosts override (No default passthrough hosts)` instead of the expected `Default: api.anthropic.com, auth.anthropic.com`.
+- The Global Settings `Passthrough Hosts` section loads with the `Enable passthrough hosts` toggle OFF and an empty editor, instead of the expected toggle-ON + pre-populated Anthropic host list.
+- The workspace Settings tab's `Passthrough Override` section shows the caption `Inheriting global setting (no passthrough hosts — proxy decrypts all HTTPS).` instead of `Inheriting global passthrough: api.anthropic.com, auth.anthropic.com.`
 - Every workspace with `passthroughHostsOverride == nil` inherits the empty global list at session start.
 - The Secrets tab banner from this ADR's guardrail correctly fires in this state (`⚠ Anthropic passthrough disabled — secrets will be sent as plaintext to api.anthropic.com, auth.anthropic.com`), surfacing the issue to the user.
 
