@@ -17,22 +17,6 @@ struct WorkspaceSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Secrets") {
-                HStack {
-                    Text("Manage secret files in the Secrets tab (Cmd+2)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                if let envPath = workspace.envFilePath {
-                    HStack {
-                        Text("Legacy .env: \((envPath as NSString).lastPathComponent)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
             Section("Container Overrides") {
                 TextField(
                     "Container image (\(globalSettings.containerImage))",
