@@ -74,13 +74,14 @@ Rejected. Testing legitimately requires removing Anthropic from passthrough some
 
 Installs that existed before commit `7390166` (2026-04-03) have `"passthroughHosts":[]` persisted in `~/Library/Application Support/Airlock/settings.json`. The Swift `AppSettings.init(from:)` decoder uses `decodeIfPresent` which only substitutes the `["api.anthropic.com", "auth.anthropic.com"]` default when the key is **absent**, not when it is **present but empty**. A user upgrading across this release will therefore start with a global passthrough list of `[]`, which means:
 
-- The workspace Settings tab shows `Passthrough hosts override (No default passthrough hosts)` instead of the expected `Default: api.anthropic.com, auth.anthropic.com`.
+- The Global Settings `Passthrough Hosts` section loads with the `Enable passthrough hosts` toggle OFF and an empty editor, instead of the expected toggle-ON + pre-populated Anthropic host list.
+- The workspace Settings tab's `Passthrough Override` section shows the caption `Inheriting global setting (no passthrough hosts — proxy decrypts all HTTPS).` instead of `Inheriting global passthrough: api.anthropic.com, auth.anthropic.com.`
 - Every workspace with `passthroughHostsOverride == nil` inherits the empty global list at session start.
 - The Secrets tab banner from this ADR's guardrail correctly fires in this state (`⚠ Anthropic passthrough disabled — secrets will be sent as plaintext to api.anthropic.com, auth.anthropic.com`), surfacing the issue to the user.
 
 **Decision: ship as-is.** No users were upgrading across this release (the project had not distributed the pre-`7390166` version yet). The guardrail banner is the safety net. An auto-heal in the decoder (treat empty array as absent) was considered and rejected because it would silently undo a user's future intentional decision to empty the list.
 
-**Fix for affected users:** Open global Settings, add `api.anthropic.com` and `auth.anthropic.com` to the Network Defaults editor, click Save. Verified manually in Scenario 1 of the manual test runbook.
+**Fix for affected users:** Open global Settings, turn on `Enable passthrough hosts` in the `Passthrough Hosts` section, ensure `api.anthropic.com` and `auth.anthropic.com` are in the editor, click Save. Verified manually in Scenario 1 of the manual test runbook.
 
 ## Future Considerations
 

@@ -6,6 +6,7 @@ struct WorkspaceSettingsView: View {
     @Bindable var appState: AppState
     @State private var globalSettings = AppSettings()
     @State private var passthroughText = ""
+    @State private var overridePassthrough = false
     @State private var showRemoveAnthropicConfirm = false
     @State private var discoveredMCPServers: [String] = []
     @State private var overrideMCPServers = false
@@ -16,22 +17,6 @@ struct WorkspaceSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Secrets") {
-                HStack {
-                    Text("Manage secret files in the Secrets tab (Cmd+2)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                if let envPath = workspace.envFilePath {
-                    HStack {
-                        Text("Legacy .env: \((envPath as NSString).lastPathComponent)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
             Section("Container Overrides") {
                 TextField(
                     "Container image (\(globalSettings.containerImage))",
@@ -47,18 +32,29 @@ struct WorkspaceSettingsView: View {
                 )
             }
 
-            Section("Network Overrides") {
-                let defaultHint = globalSettings.passthroughHosts.isEmpty
-                    ? "No default passthrough hosts"
-                    : "Default: \(globalSettings.passthroughHosts.joined(separator: ", "))"
-                HostListEditor(
-                    caption: "Passthrough hosts override (\(defaultHint))",
-                    text: $passthroughText,
-                    missingHosts: passthroughOverrideMissingHosts,
-                    warningText: { joined in
-                        "This override would remove \(joined) from passthrough. Airlock would decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers."
+            Section("Passthrough Override") {
+                Toggle("Override global passthrough", isOn: $overridePassthrough)
+                    .onChange(of: overridePassthrough) { _, newValue in
+                        if newValue && passthroughText.isEmpty {
+                            // Prefill from global when turning override on,
+                            // matching the network allow-list override pattern.
+                            passthroughText = globalSettings.passthroughHosts.joined(separator: "\n")
+                        }
                     }
-                )
+                if overridePassthrough {
+                    HostListEditor(
+                        caption: "Workspace passthrough hosts (one per line). Overrides global passthrough entirely.",
+                        text: $passthroughText,
+                        missingHosts: passthroughOverrideMissingHosts,
+                        warningText: { joined in
+                            "This override would remove \(joined) from passthrough. Airlock would decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers."
+                        }
+                    )
+                } else {
+                    Text(inheritedPassthroughDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("MCP Servers Override") {
@@ -133,15 +129,12 @@ struct WorkspaceSettingsView: View {
                 proceedAfterPassthroughConfirmed()
             }
         } message: {
-            let missing = PassthroughPolicy.missingProtectedHosts(
-                from: PassthroughPolicy.splitHostLines(passthroughText)
-            )
-            Text("\(missing.joined(separator: ", ")) will not be in this workspace's passthrough list. Airlock will decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
+            Text("\(passthroughOverrideMissingHosts.joined(separator: ", ")) will not be in this workspace's passthrough list. Airlock will decrypt secrets in requests to Anthropic, sending your plaintext credentials to Anthropic's servers. Continue?")
         }
         .alert("Allow-list blocks Anthropic in this workspace?", isPresented: $showAllowlistAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Save anyway", role: .destructive) {
-                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+                commitSave()
             }
         } message: {
             let missing = NetworkAllowlistPolicy.missingProtectedHosts(
@@ -152,14 +145,13 @@ struct WorkspaceSettingsView: View {
     }
 
     /// Protected hosts missing from the workspace passthrough override.
-    /// Returns an empty list when the editor is empty (empty = inherit
-    /// global, not an explicit removal), so the HostListEditor only
-    /// shows the warning for explicit non-empty overrides.
+    /// The override toggle gates this: when the toggle is OFF we return
+    /// an empty list (inherit is safe), but when ON we always check —
+    /// including the empty-editor case, which now means "explicitly no
+    /// passthrough for this workspace".
     private var passthroughOverrideMissingHosts: [String] {
+        guard overridePassthrough else { return [] }
         let parsed = PassthroughPolicy.splitHostLines(passthroughText)
-        if parsed.isEmpty {
-            return []
-        }
         return PassthroughPolicy.missingProtectedHosts(from: parsed)
     }
 
@@ -172,6 +164,13 @@ struct WorkspaceSettingsView: View {
         return "Inheriting global setting (all MCP servers enabled)."
     }
 
+    private var inheritedPassthroughDescription: String {
+        if globalSettings.passthroughHosts.isEmpty {
+            return "Inheriting global setting (no passthrough hosts — proxy decrypts all HTTPS)."
+        }
+        return "Inheriting global passthrough: \(globalSettings.passthroughHosts.joined(separator: ", "))."
+    }
+
     private var inheritedAllowlistDescription: String {
         if let global = globalSettings.networkAllowlist, !global.isEmpty {
             return "Inheriting global allow-list: \(global.joined(separator: ", "))."
@@ -181,7 +180,13 @@ struct WorkspaceSettingsView: View {
 
     private func load() {
         globalSettings = (try? WorkspaceStore().loadSettings()) ?? AppSettings()
-        passthroughText = workspace.passthroughHostsOverride?.joined(separator: "\n") ?? ""
+        if let override = workspace.passthroughHostsOverride {
+            overridePassthrough = true
+            passthroughText = override.joined(separator: "\n")
+        } else {
+            overridePassthrough = false
+            passthroughText = ""
+        }
         discoveredMCPServers = MCPInventoryService.discoverServerNames()
         if let override = workspace.enabledMCPServersOverride {
             overrideMCPServers = true
@@ -203,14 +208,14 @@ struct WorkspaceSettingsView: View {
         // Guardrails chain: passthrough → allow-list → commit. Each alert's
         // "confirm anyway" button re-enters this chain via the next helper
         // so users see BOTH warnings if they're both violated.
-        let hosts = PassthroughPolicy.splitHostLines(passthroughText)
-        // Empty override = inherit global; not flagged.
-        if !hosts.isEmpty {
-            let missing = PassthroughPolicy.missingProtectedHosts(from: hosts)
-            if !missing.isEmpty {
-                showRemoveAnthropicConfirm = true
-                return
-            }
+        //
+        // `passthroughOverrideMissingHosts` already handles the toggle gate:
+        // when the toggle is OFF it returns empty (inherit is safe); when
+        // ON it checks the editor contents, including the empty-editor case
+        // which now means "explicitly no passthrough for this workspace".
+        if !passthroughOverrideMissingHosts.isEmpty {
+            showRemoveAnthropicConfirm = true
+            return
         }
         proceedAfterPassthroughConfirmed()
     }
@@ -223,12 +228,20 @@ struct WorkspaceSettingsView: View {
                 return
             }
         }
-        commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+        commitSave()
     }
 
-    private func commitSave(hosts: [String]) {
+    private func commitSave() {
         if let idx = appState.workspaces.firstIndex(where: { $0.id == workspace.id }) {
-            appState.workspaces[idx].passthroughHostsOverride = hosts.isEmpty ? nil : hosts
+            if overridePassthrough {
+                // Explicit override — empty array means "no passthrough for
+                // this workspace" (not "inherit"). nil is only written when
+                // the toggle is OFF.
+                appState.workspaces[idx].passthroughHostsOverride =
+                    PassthroughPolicy.splitHostLines(passthroughText)
+            } else {
+                appState.workspaces[idx].passthroughHostsOverride = nil
+            }
             appState.workspaces[idx].enabledMCPServersOverride = overrideMCPServers
                 ? workspaceMCPSelection.sorted()
                 : nil

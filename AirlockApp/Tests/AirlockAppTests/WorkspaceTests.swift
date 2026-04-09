@@ -74,6 +74,18 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertEqual(decoded.enabledMCPServersOverride, [])
     }
 
+    func testEmptyPassthroughOverridePersisted() throws {
+        // Empty array is a valid explicit override ("no passthrough for
+        // this workspace"), distinct from nil (inherit global). The
+        // workspace settings toggle exposes this difference directly.
+        var ws = Workspace(name: "test", path: "/tmp")
+        ws.passthroughHostsOverride = []
+        let data = try JSONEncoder().encode(ws)
+        let decoded = try JSONDecoder().decode(Workspace.self, from: data)
+        XCTAssertNotNil(decoded.passthroughHostsOverride)
+        XCTAssertEqual(decoded.passthroughHostsOverride, [])
+    }
+
     func testBackwardsCompatDecoding() throws {
         // Simulate old workspaces.json without new fields
         let json = """
