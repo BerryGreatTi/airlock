@@ -361,7 +361,7 @@ Three equivalent entry points (pick any):
 2. Terminal (font + size)
 3. General (airlock binary path)
 4. Container Defaults
-5. Network Defaults (passthrough hosts)
+5. Passthrough Hosts (toggle + editor)
 6. MCP Servers
 7. **Network Allow-list** ← scenario 6's target
 8. Claude Code State Volume
@@ -494,7 +494,7 @@ This is the critical UX regression fix from the code review.
 ### Subscenario 7a — Chained guardrails (no session activation needed)
 
 - [ ] **7a.1** Select the workspace in the sidebar, switch to the **Settings** tab (Cmd+4).
-- [ ] **7a.2** In "Network Overrides", type a passthrough override that does NOT include Anthropic:
+- [ ] **7a.2** In "Passthrough Override", turn the `Override global passthrough` toggle ON. The editor appears prefilled with the global host list. Clear it, then type a passthrough override that does NOT include Anthropic:
     ```
     api.github.com
     ```
@@ -509,7 +509,7 @@ This is the critical UX regression fix from the code review.
     - **Second alert** (immediately after dismissing the first): `Allow-list blocks Anthropic in this workspace?` — title mentions allow-list. This alert MUST appear. If it does not, the guardrail-chaining fix has regressed — STOP and investigate.
     - Click `Cancel` on the second alert. Neither override is saved.
 - [ ] **7a.5** Verify persistence: reopen the tab. The two TextEditors should still show the in-progress drafts (not yet persisted). The workspace's `workspaces.json` entry should NOT contain `passthroughHostsOverride` or `networkAllowlistOverride`.
-- [ ] **7a.6** Clear both editors (delete all text in both), click **Save**. **Expected:** No alerts, sheet closes. The workspace now falls back to global settings for both.
+- [ ] **7a.6** Turn BOTH override toggles OFF (`Override global passthrough` AND `Override global allow-list`). The editors disappear and the captions read "Inheriting ...". Click **Save**. **Expected:** No alerts, the workspace now inherits global settings for both.
 
 ### Subscenario 7b — End-to-end: allow-list-restricted workspace runs Claude Code
 

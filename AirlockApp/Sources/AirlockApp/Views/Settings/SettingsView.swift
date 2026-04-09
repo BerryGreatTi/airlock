@@ -193,7 +193,7 @@ struct GlobalSettingsSheet: View {
         .alert("Allow-list blocks Anthropic?", isPresented: $showAllowlistAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Save anyway", role: .destructive) {
-                commitSave(hosts: enablePassthrough ? PassthroughPolicy.splitHostLines(passthroughText) : [])
+                commitSave()
             }
         } message: {
             let missing = NetworkAllowlistPolicy.missingProtectedHosts(
@@ -279,12 +279,12 @@ struct GlobalSettingsSheet: View {
                 return
             }
         }
-        commitSave(hosts: enablePassthrough ? PassthroughPolicy.splitHostLines(passthroughText) : [])
+        commitSave()
     }
 
-    private func commitSave(hosts: [String]) {
+    private func commitSave() {
         if enablePassthrough {
-            settings.passthroughHosts = hosts
+            settings.passthroughHosts = PassthroughPolicy.splitHostLines(passthroughText)
             settings.passthroughHostsDraft = nil
         } else {
             settings.passthroughHosts = []

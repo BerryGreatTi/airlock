@@ -42,15 +42,17 @@ All three are pass/fail on a single log line or HTTP response. If any step devia
 - [ ] **1.4** Choose a scratch directory, e.g., `mkdir -p /tmp/airlock-test-scenario-1 && pick that`.
 - [ ] **1.5** Select the new workspace in the sidebar. Do NOT click "Activate" yet.
 - [ ] **1.6** Switch to the **Settings** tab (Cmd+4) for this workspace.
-- [ ] **1.7** Find the "Network Overrides" section. **Expected:**
-    - Caption reads `Default: api.anthropic.com, auth.anthropic.com`
-    - The override `TextEditor` is EMPTY (empty override = inherit global)
-    - NO yellow inline warning row below the editor
+- [ ] **1.7** Find the "Passthrough Override" section. **Expected:**
+    - `Override global passthrough` toggle is OFF
+    - Caption reads `Inheriting global passthrough: api.anthropic.com, auth.anthropic.com.`
+    - No override `TextEditor` is visible (hidden while toggle is OFF)
+    - NO yellow inline warning row
 - [ ] **1.8** Switch to the **Secrets** tab (Cmd+2) for this workspace. **Expected:**
     - NO yellow "⚠ Anthropic passthrough disabled" banner at the top of the view
     - The "Env Variables" sidebar section is visible and empty
 - [ ] **1.9** Open global Settings (gear icon / menu `Airlock → Settings...`).
-- [ ] **1.10** Find the "Network Defaults" section. **Expected:**
+- [ ] **1.10** Find the "Passthrough Hosts" section. **Expected:**
+    - `Enable passthrough hosts` toggle is ON
     - The `TextEditor` contains TWO lines: `api.anthropic.com` and `auth.anthropic.com`
     - NO yellow inline warning row below the editor
 - [ ] **1.11** Close the Settings sheet with Cancel (do not save).
