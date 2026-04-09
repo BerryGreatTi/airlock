@@ -6,6 +6,7 @@ struct GlobalSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var settings = AppSettings()
     @State private var passthroughText = ""
+    @State private var enablePassthrough = true
     @State private var saved = false
     @State private var volumeStatus = "Checking..."
     @State private var showImportSheet = false
@@ -67,17 +68,24 @@ struct GlobalSettingsSheet: View {
                     TextField("Proxy image", text: $settings.proxyImage)
                 }
 
-                Section("Network Defaults") {
-                    HostListEditor(
-                        caption: "Default passthrough hosts (skip proxy decryption, one per line)",
-                        text: $passthroughText,
-                        missingHosts: PassthroughPolicy.missingProtectedHosts(
-                            from: PassthroughPolicy.splitHostLines(passthroughText)
-                        ),
-                        warningText: { joined in
-                            "Removing \(joined) from passthrough means Airlock will decrypt secrets in requests to Anthropic. Your plaintext credentials will be sent to Anthropic's servers. This defeats the purpose of Airlock — only remove for testing."
-                        }
-                    )
+                Section("Passthrough Hosts") {
+                    Toggle("Enable passthrough hosts", isOn: $enablePassthrough)
+                    if enablePassthrough {
+                        HostListEditor(
+                            caption: "Passthrough hosts skip proxy decryption (one per line). Anthropic endpoints belong here so credentials stay encrypted in transit.",
+                            text: $passthroughText,
+                            missingHosts: PassthroughPolicy.missingProtectedHosts(
+                                from: PassthroughPolicy.splitHostLines(passthroughText)
+                            ),
+                            warningText: { joined in
+                                "Removing \(joined) from passthrough means Airlock will decrypt secrets in requests to Anthropic. Your plaintext credentials will be sent to Anthropic's servers. This defeats the purpose of Airlock — only remove for testing."
+                            }
+                        )
+                    } else {
+                        Text("All outbound HTTPS, including Anthropic, will flow through the proxy for secret decryption. Your plaintext credentials will be sent to Anthropic's servers.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("MCP Servers") {
@@ -188,7 +196,7 @@ struct GlobalSettingsSheet: View {
         .alert("Allow-list blocks Anthropic?", isPresented: $showAllowlistAnthropicConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Save anyway", role: .destructive) {
-                commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+                commitSave(hosts: enablePassthrough ? PassthroughPolicy.splitHostLines(passthroughText) : [])
             }
         } message: {
             let missing = NetworkAllowlistPolicy.missingProtectedHosts(
@@ -211,7 +219,16 @@ struct GlobalSettingsSheet: View {
     private func load() {
         let store = WorkspaceStore()
         settings = (try? store.loadSettings()) ?? AppSettings()
-        passthroughText = settings.passthroughHosts.joined(separator: "\n")
+        if settings.passthroughHosts.isEmpty {
+            // Toggle OFF state — show the persisted draft (if any) so the
+            // user sees whatever they were working on before they turned
+            // passthrough off. Nil draft => empty editor.
+            enablePassthrough = false
+            passthroughText = (settings.passthroughHostsDraft ?? []).joined(separator: "\n")
+        } else {
+            enablePassthrough = true
+            passthroughText = settings.passthroughHosts.joined(separator: "\n")
+        }
         discoveredMCPServers = MCPInventoryService.discoverServerNames()
         if let allowed = settings.enabledMCPServers {
             restrictMCPServers = true
@@ -234,7 +251,14 @@ struct GlobalSettingsSheet: View {
         // "confirm anyway" button re-enters this chain via the next helper
         // so users see BOTH warnings if they're both violated, instead of
         // silently losing the second alert after confirming the first.
-        let parsed = PassthroughPolicy.splitHostLines(passthroughText)
+        //
+        // When the passthrough toggle is OFF, the stored host list is []
+        // (meaning proxy decrypts everything). missingProtectedHosts([])
+        // returns the full protected set, so the guardrail still fires —
+        // disabling passthrough is always a confirmed action.
+        let parsed = enablePassthrough
+            ? PassthroughPolicy.splitHostLines(passthroughText)
+            : []
         let missing = PassthroughPolicy.missingProtectedHosts(from: parsed)
         if !missing.isEmpty {
             showRemoveAnthropicConfirm = true
@@ -251,11 +275,20 @@ struct GlobalSettingsSheet: View {
                 return
             }
         }
-        commitSave(hosts: PassthroughPolicy.splitHostLines(passthroughText))
+        commitSave(hosts: enablePassthrough ? PassthroughPolicy.splitHostLines(passthroughText) : [])
     }
 
     private func commitSave(hosts: [String]) {
-        settings.passthroughHosts = hosts
+        if enablePassthrough {
+            settings.passthroughHosts = hosts
+            settings.passthroughHostsDraft = nil
+        } else {
+            settings.passthroughHosts = []
+            // Preserve whatever is currently in the editor so the user can
+            // flip the toggle back ON later and see their previous list.
+            let draft = PassthroughPolicy.splitHostLines(passthroughText)
+            settings.passthroughHostsDraft = draft.isEmpty ? nil : draft
+        }
         settings.enabledMCPServers = restrictMCPServers
             ? enabledMCPSelection.sorted()
             : nil
